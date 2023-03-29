@@ -6,7 +6,7 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Build the Docker image
-      uses: elgohr/Publish-Docker-Github-Action@master
+      uses: elgohr/Publish-Docker-Github-Action@v5
       env:
         REPLACE_CHINA_MIRROR: false
         VCS_REF: ${{ github.sha }}

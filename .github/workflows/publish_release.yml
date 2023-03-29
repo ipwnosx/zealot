@@ -16,7 +16,7 @@ jobs:
       id: version
       run: echo ::set-output name=tag::$(echo ${GITHUB_REF:10})
     - name: Publish to Registry
-      uses: elgohr/Publish-Docker-Github-Action@master
+      uses: elgohr/Publish-Docker-Github-Action@v5
       env:
         REPLACE_CHINA_MIRROR: false
         VCS_REF: ${{ github.sha }}
