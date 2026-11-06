@@ -9,11 +9,11 @@ class ApplicationPolicy
   end
 
   def index?
-    Setting.guest_mode || user_signed_in?
+    user_signed_in_or_guest_mode?
   end
 
   def show?
-    scope.where(id: record.id).exists? || Setting.guest_mode || user?
+    scope.where(id: record.id).exists? || user_signed_in_or_guest_mode?
   end
 
   def create?
@@ -40,7 +40,7 @@ class ApplicationPolicy
     Pundit.policy_scope!(user, record.class)
   end
 
-  delegate :admin?, :developer?, :manage?, :user?, to: :user, allow_nil: true
+  delegate :admin?, :developer?, :manage?, :member?, to: :user, allow_nil: true
 
   class Scope
     attr_reader :user, :scope
@@ -55,7 +55,22 @@ class ApplicationPolicy
     end
   end
 
-  private
+  protected
+
+  def app_collaborator?(user, app, role: nil, exclude: false)
+    model = Collaborator.where(user: user, app: app)
+    return model.exists? unless role
+    
+    exclude ? model.where.not(role: role).exists? : model.where(role: role).exists?
+  end
+
+  def user_signed_in_or_guest_mode?
+    guest_mode? || user_signed_in?
+  end
+
+  def guest_mode?
+    Setting.guest_mode
+  end
 
   def user_signed_in?
     user.present?

@@ -1,0 +1,79 @@
+ruby:
+  anchor = ios_debug_file?(@debug_file) ? 'dsym' : 'proguard'
+
+- content_for :title do
+  = app_scoped_title(@app, @title)
+
+- content_for :section_title do
+  = @title
+
+- content_for :section_rightpanel do
+  = button_link_to '', app_debug_files_path(@app, anchor: anchor), 'list-alt', \
+    class: 'd-btn d-tooltip', base_fa: 'fa-regular', data: { tip: t('links.back_to_list')}
+
+.card
+  .card-header
+    h3.card-title class="flex items-center gap-2"
+      = device_icon(@debug_file.device_type)
+      div
+        div class="font-semibold text-xl"
+          = debug_file_version(@debug_file)
+        div.text-break class="text-sm opacity-60"
+          - if @debug_file.processing?
+            = t('debug_files.device.processing')
+          - elsif @debug_file.parse_failed?
+            span class="text-error" = t('debug_files.show.parse_failed')
+          - elsif @debug_file.bundle_id.present?
+            = @debug_file.bundle_id
+          - else
+            = t('debug_files.device.reparse_required')
+    .card-tools
+      .d-badge.d-badge-ghost = debug_file_type(@debug_file)
+
+  .card-body
+    div class="flex flex-wrap items-center gap-4"
+      div class="d-tooltip" data-tip=t('.version')
+        i.fa-brands.fa-gg.mr-1
+        = @debug_file.id
+      div class="d-tooltip" data-tip=t('.device_type')
+        = safe_join([device_icon(@debug_file.device_type), platform_name(@debug_file.device_type)], ' ')
+      - if @debug_file.filesize.present?
+        div class="d-tooltip" data-tip=t('.file_size')
+          i.fa-solid.fa-weight.mr-1
+          = number_to_human_size(@debug_file.filesize)
+      div class="d-tooltip" data-tip="#{t('.uploaded_at')} #{l(@debug_file.created_at, format: :nice)}"
+        i.fa-solid.fa-calendar.mr-1
+        = time_ago_in_words(@debug_file.created_at)
+
+    - if @debug_file.parse_failed?
+      .d-alert.d-alert-error.my-3
+        i.fa-solid.fa-circle-xmark.text-2xl
+        div class="min-w-0"
+          div.font-bold = t('debug_files.show.parse_failed')
+          div class="text-xs break-words" = @debug_file.parse_error
+
+    .flex.gap-2.my-3
+      - if @debug_file.file?
+        = button_link_to t('.download'), @debug_file.file_url, 'download', target: '_blank', \
+          class: 'd-btn md:d-btn-lg d-btn-success'
+      - else
+        button.d-btn.d-btn-disabled class="d-btn md:d-btn-lg"
+          i.fa-solid.fa-ghost
+          = t('.missing_file')
+
+      - if current_user&.manage?(app: @app)
+        - if !@debug_file.processing? && @debug_file.file?
+          = button_link_to t('.reprocess'), reprocess_app_debug_file_path(@app, @debug_file), 'repeat', \
+            class: 'd-btn md:d-btn-lg d-btn-primary', data: { turbo_method: :post }
+
+        = button_link_to t('modals.buttons.destroy'), app_debug_file_path(@app, @debug_file), 'trash-alt', \
+          class: 'd-btn d-btn-error d-btn md:d-btn-lg', data: { \
+            turbo_method: :delete, \
+            turbo_confirm: t('modals.confirm.body'), \
+          }
+
+- if @debug_file.metadata.exists?
+  - if ios_debug_file?(@debug_file)
+    == render 'ios_objects', debug_file: @debug_file
+  - else
+    == render 'android_files', proguard_files: @debug_file.proguard_files

@@ -1,0 +1,78 @@
+label.card-header.card-collapse-toggle for="signatures-collapse"
+  h3.card-title
+    = t('teardowns.show.signature_title')
+    .d-badge.d-badge-ghost = @metadata.developer_certs.size
+  .card-tools
+.card-body.space-y-4.p-0
+  .p-3.space-y-4
+    - signatures.each_with_index do |signature, i|
+      - state = signature_state(signature)
+      - errors = Array(signature['verification_errors'])
+      - lineage = Array(signature['certificate_lineage'])
+      .card class="bg-base-200/40 shadow-sm break-inside-avoid"
+        .card-body.gap-4
+          .flex.justify-between
+            .font-semibold
+              = t('teardowns.show.signature', scheme: "v#{signature['scheme']}")
+            .d-badge.d-badge-ghost.d-badge-sm class=signature_state_class(state)
+              = t("teardowns.show.signature_#{state}")
+
+          - if signature['description'].present?
+            .text-sm.opacity-65 = signature['description']
+
+          - if errors.present?
+            ul.space-y-2.text-sm
+              - errors.each do |error|
+                li.space-y-1
+                  .d-badge.d-badge-ghost.d-badge-sm = error['code']
+                  .break-all.opacity-75 = error['message']
+
+          - if signature['certificates'].present?
+            - signature['certificates'].each_with_index do |certificate, i|
+              .font-bold = t('teardowns.show.cert', index: "#{i + 1}")
+              ul.space-y-3.text-sm
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_serial')
+                  span.font-medium = "#{certificate['serial']['number']} (#{certificate['serial']['hex']})"
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_version')
+                  span.font-medium = certificate['version']
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_algorithem')
+                  span.font-medium = certificate['algorithem']
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_digest')
+                  span.font-medium = certificate['digest']
+                - if certificate['length'].present?
+                  li.flex.flex-col.gap-1
+                    span.opacity-65 = t('teardowns.show.cert_length')
+                    span.font-medium = certificate['length']
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_issuer')
+                  span.font-medium = certificate_name(certificate['issuer'])
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_created')
+                  span.font-medium = l(Time.zone.parse(certificate['created_at']), format: :nice)
+                li.flex.flex-col.gap-1
+                  span.opacity-65 = t('teardowns.show.cert_expired')
+                  span.font-medium = t('teardowns.show.cert_expired_at', date: l(Time.zone.parse(certificate['expired_at']), format: :nice))
+                li.flex.flex-col.gap-1.break-all
+                  span.opacity-65 = t('teardowns.show.cert_fignger', digest: 'SHA-256')
+                  span.font-medium = certificate['fingerprint']['sha256']
+                li.flex.flex-col.gap-1.break-all
+                  span.opacity-65 = t('teardowns.show.cert_fignger', digest: 'SHA-1')
+                  span.font-medium = certificate['fingerprint']['sha1']
+                li.flex.flex-col.gap-1.break-all
+                  span.opacity-65 = t('teardowns.show.cert_fignger', digest: 'MD5')
+                  span.font-medium = certificate['fingerprint']['md5']
+
+          - if lineage.size > 1
+            .border-t.pt-3.space-y-2
+              .font-bold = t('teardowns.show.certificate_lineage')
+              ol.list-decimal.pl-5.space-y-2.text-sm
+                - lineage.each_with_index do |node, index|
+                  li.space-y-1
+                    .font-medium = t('teardowns.show.certificate_lineage_node', index: index + 1, name: certificate_name(node.dig('certificate', 'subject') || []))
+                    .opacity-65 = t('teardowns.show.certificate_lineage_flags', flags: node['flags'])
+                    - if node['parent_signature_algorithm_id'].to_i.positive?
+                      .opacity-65 = t('teardowns.show.certificate_lineage_algorithm', id: node['parent_signature_algorithm_id'])

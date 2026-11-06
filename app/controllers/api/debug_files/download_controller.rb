@@ -5,7 +5,7 @@ class Api::DebugFiles::DownloadController < Api::BaseController
   before_action :set_app
 
   # GET /api/debug_files/download
-  def index
+  def show
     release_version = params[:release_version]
     build_version = params[:build_version]
     order = convert_order(params[:order])
@@ -26,7 +26,7 @@ class Api::DebugFiles::DownloadController < Api::BaseController
   private
 
   def render_not_found
-    render json: { error: '没有找到调试文件' }, status: :not_found
+    render json: { error: t('api.debug_files.download.default.not_found') }, status: :not_found
   end
 
   def both_version?(release_version, build_version)
@@ -59,7 +59,7 @@ class Api::DebugFiles::DownloadController < Api::BaseController
   end
 
   def set_app
-    @channel.app
+    @app = @channel.app
   end
 
   def convert_order(value)

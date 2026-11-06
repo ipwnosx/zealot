@@ -1,9 +1,7 @@
-.col-md-8
-  == render 'mobileprovision_part'
+.waterfall
+  == render 'mobileprovision_part', enable_icon: true
   == render 'developer_certs_part'
-  == render 'devices_part'
-  == render 'card', title: 'Entitlements', raw: @metadata.entitlements
-
-.col-md-4
-  == render 'card', title: '启用能力', raw: @metadata.capabilities
-  == render 'card', title: 'URL Schemes', raw: @metadata.url_schemes
+  == render 'devices_part', devices: @metadata.devices
+  == render 'card', key: 'entitlements', raw: @metadata.entitlements
+  == render 'card', key: 'capabilities', raw: @metadata.capabilities
+  == render 'card', key: 'url_schemes', raw: @metadata.url_schemes

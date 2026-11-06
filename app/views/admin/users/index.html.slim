@@ -1,48 +1,24 @@
 - content_for :title do
-  = @title
+  = t('.title')
 
 - content_for :section_title do
-  = @title
+  = t('.title')
 
 - content_for :section_rightpanel do
-  a.btn.btn-icon.bg-green href="#{new_admin_user_path}"
-    i.far.fa-plus-square
-    | 新建用户
+  = icon_link_to 'fa-regular fa-plus-square', new_admin_user_path, text: t('.new_user'), \
+    link: { class: 'd-btn d-btn-success', data: { turbo_frame: :modal } }
 
-.row
-  .col-md-12
-    .card
-      .card-body
-        table.table.p-0
-          thead
-            tr
-              th NO
-              th 用户昵称
-              th 邮箱
-              th 权限
-              th 状态
-              th 最后登录时间
-              th 操作
-          tbody
-            - @users.each_with_index do |user, i|
-              tr
-                td
-                  = i + 1
-                td
-                  = link_to user.username, edit_admin_user_path(user)
-                td
-                  = user.email
-                td
-                  = user.role_name
-                td
-                  - if user.confirmed_at
-                    | 已激活
-                  - else
-                    = link_to '未激活', edit_admin_user_path(user)
-                td
-                  - if user.last_sign_in_at
-                    = time_ago_in_words(user.last_sign_in_at)
-                  - else
-                    | 从未登录
-                td
-                  = link_to '删除', admin_user_path(user), method: :delete, data: { confirm: '你确定？'}
+.card
+  .card-header
+    h3.card-title
+      i.fa-solid.fa-users-line
+      = t('.title')
+  .card-body.p-0.gap-0
+    div class="grid grid-cols-12 flex-row py-2 px-3 font-semibold opacity-65 border-b border-base-300"
+      div class="col-span-6 md:col-span-3" = t('.email')
+      div class="col-span-4 md:col-span-2" = t('.nickname')
+      div class="col-span-2" = t('.role')
+      div class="col-span-2 hidden md:block" = t('.status')
+      div class="col-span-3 hidden md:block text-right" = t('.last_login_time')
+    #users
+      == render @users

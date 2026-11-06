@@ -5,21 +5,22 @@ cd /app
 # Clear pid if unexpected exception exit
 rm -f tmp/pids/.pid
 mkdir -p tmp/pids tmp/cache tmp/uploads tmp/sockets log
+mkdir -p public/backup public/uploads
 
-# Updating assets
-if [ -d "new_public" ]; then
-  echo "Zealot updating public ..."
-  for x in public/*; do
-    if [ -z $(echo "$x" | grep uploads) ]; then
-      rm -rf "$x" > /dev/null
-    fi
-  done
+echo ""
+echo "Welcome to Zealot!, here is major changes: "
+echo " * Brand new UI rewrite, more modern and user friendly."
+echo " * Swagger API explorer is buit-in."
+echo ""
 
-  for x in new_public/*; do
-    if [ -z $(echo "$x" | grep uploads) ]; then
-      mv "$x" "public"
-    fi
-  done
-
-  rm -rf new_public
+if [ -n "$REDIS_URL" ]; then
+  echo
+  case $REDIS_URL in
+    *redis:*|localhost:*|127.0.0.1:*)
+      echo "[WARN] Detected REDIS_URL and redis service, you can remove redis service and the variable."
+      ;;
+    *)
+      echo "[WARN] Detected REDIS_URL variable, you can remove the variable."
+      ;;
+  esac
 fi

@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 class Release < ApplicationRecord
-  include Rails.application.routes.url_helpers
+  extend VersionCompare
+
+  include ReleaseUrl
+  include ReleaseAuth
+  include ReleaseParser
+  include RecentlyReleasesCacheable
 
   mount_uploader :file, AppFileUploader
   mount_uploader :icon, AppIconUploader
@@ -10,77 +15,79 @@ class Release < ApplicationRecord
 
   belongs_to :channel
   has_one :metadata, class_name: 'Metadatum', dependent: :destroy
-  has_and_belongs_to_many :devices
+  has_and_belongs_to_many :devices, dependent: :destroy
 
-  validates :bundle_id, :release_version, :build_version, :file, presence: true
+  validates :file, presence: true, on: :create
   validate :bundle_id_matched, on: :create
+  validate :determine_file_exist, on: :create
 
+  before_validation :determine_disk_space
   before_create :auto_release_version
   before_create :default_source
+  before_create :detect_device
   before_save   :convert_changelog
   before_save   :convert_custom_fields
-  before_save   :trip_branch
-  before_save   :detect_device
+  before_save   :strip_branch
+
+  after_create  :retained_build_job
+  after_create  :delete_app_recently_releases_cache
 
   delegate :scheme, to: :channel
   delegate :app, to: :scheme
 
-  paginates_per     20
-  max_paginates_per 50
+  paginates_per     50
+  max_paginates_per 100
 
   def self.version_by_channel(channel_slug, release_id)
     channel = Channel.friendly.find(channel_slug)
     channel.releases.find(release_id)
   end
 
-  # 上传pp
-  def self.upload_file(params, parser = nil)
-    logger.debug "upload file params: #{params}"
-    create(params) do |release|
-      if release.file.present?
-        begin
-          parser ||= AppInfo.parse(release.file.path)
-          release.source ||= 'Web'
-          release.name = parser.name
-          release.bundle_id = parser.bundle_id
-          release.release_version = parser.release_version
-          release.build_version = parser.build_version
-          release.device = parser.device_type
-
-          if parser.os == AppInfo::Platform::IOS
-            release.release_type ||= parser.release_type
-
-            icon_file = parser.icons.last.try(:[], :uncrushed_file)
-            release.icon = icon_file if icon_file
-          else
-            # 处理 Android anydpi 自适应图标
-            icon_file = parser.icons
-                              .reject { |f| File.extname(f[:file]) == '.xml' }
-                              .last
-                              .try(:[], :file)
-            release.icon = File.open(icon_file, 'rb') if icon_file
-          end
-
-          # iOS 且是 AdHoc 尝试解析 UDID 列表
-          if parser.os == AppInfo::Platform::IOS &&
-             parser.release_type == AppInfo::IPA::ExportType::ADHOC &&
-             parser.devices.present?
-
-            parser.devices.each do |udid|
-              release.devices << Device.find_or_create_by(udid: udid)
-            end
-          end
-        rescue AppInfo::UnkownFileTypeError
-          release.errors.add(:file, '上传的应用无法正确识别')
-        ensure
-          parser.clear!
-        end
-      end
+  # 上传 app
+  def self.upload_file(params, parser: nil, source: 'web')
+    Release.new(params) do |release|
+      release.parse!(parser, source)
     end
+  end
+
+  def self.find_since_version(release_version, build_version)
+    current_release = select(:id).find_by(
+      release_version: release_version,
+      build_version: build_version
+    )
+
+    prepared_releases = if current_release
+      where('id > ?', current_release.id).order(id: :desc)
+    else
+      newer_versions = channel.release_versions.select { |version| ge_version(version, release_version) }
+      where(elease_version: newer_versions,).order(id: :desc)
+    end
+
+    prepared_releases.select { |release|
+      ge_version(release.release_version, release_version) &&
+        gt_version(release.build_version, build_version)
+    }
   end
 
   def app_name
     "#{app.name} #{scheme.name} #{channel.name}"
+  end
+
+  def native_codes(original: true)
+    return unless native_codes = metadata&.native_codes
+    return native_codes if original
+
+    native_codes.each_with_object({}) do |code, obj|
+      key = nil
+      key = :x86 if code.include?('x86')
+      key = :arm if code.include?('arm')
+      key = :mips if code.include?('mips')
+      key = riscv if code.include?('riscv')
+      next unless key
+
+      obj[key] ||= []
+      obj[key] = code
+    end
   end
 
   def size
@@ -94,61 +101,49 @@ class Release < ApplicationRecord
     git_commit[0..8]
   end
 
-  def changelog_list(use_default_changelog = true)
-    return empty_changelog(use_default_changelog) if changelog.blank?
-    return [{'message' => changelog.to_s}] unless changelog.is_a?(Array) || changelog.is_a?(Hash)
+  def array_changelog(default_template: true)
+    return empty_changelog(default_template) if changelog.blank?
 
-    changelog
+    case changelog
+    when Array
+      changelog.map do |commit|
+        commit.is_a?(Hash) ? commit : { 'message' => commit.to_s }
+      end
+    when Hash
+      [changelog]
+    else
+      [{ 'message' => changelog.to_s }]
+    end
   end
 
-  def has_file?
+  def text_changelog(default_template: true, head_line: false, field: 'message')
+    array_changelog(default_template: default_template).each_with_object([]) do |line, obj|
+      value = line[field]&.to_s || ''
+      message = head_line ? value.split("\n")[0] : value
+      obj << "- #{message}"
+    end.join("\n")
+  end
+
+  def file?
     return false if file.blank?
 
     File.exist?(file.path)
   end
 
-  def download_url
-    download_release_url(id)
-  end
-
-  def install_url
-    return download_url if channel.device_type.casecmp('android').zero?
-
-    download_url = channel_release_install_url(channel.slug, id)
-    "itms-services://?action=download-manifest&url=#{download_url}"
-  end
-
-  def release_url
-    channel_release_url(channel, self)
-  end
-
-  def qrcode_url(size = :thumb)
-    channel_release_qrcode_url channel, self, size: size
-  end
-
   def file_extname
-    case channel.device_type.downcase
-    when 'iphone', 'ipad', 'ios', 'universal'
-      '.ipa'
-    when 'android'
-      '.apk'
-    else
-      '.ipa_or_apk.zip'
-    end
+    return '.zip' if file.blank? || !File.file?(file&.path)
+
+    File.extname(file.path)
   end
 
   def download_filename
-    [
-      channel.slug, release_version, build_version, created_at.strftime('%Y%m%d%H%M')
-    ].join('_') + file_extname
-  end
-
-  def mime_type
-    case channel.device_type
-    when 'iOS'
-      :ipa
-    when 'Android'
-      :apk
+    case channel.download_filename_type&.downcase&.to_sym
+    when :version_datetime
+      version_datetime_filename
+    when :original_filename
+      original_filename
+    else
+      default_filename
     end
   end
 
@@ -156,13 +151,12 @@ class Release < ApplicationRecord
     return [] unless use_default_changelog
 
     @empty_changelog ||= [{
-      'message' => "没有找到更新日志，可能的原因：\n\n- 开发者很懒没有留下更新日志😂\n- 有不可抗拒的因素造成日志丢失👽",
+      'message' => I18n.t('releases.messages.default_changelog')
     }]
   end
 
-  def outdated?
+  def latest_version
     lastest = channel.releases.last
-
     return lastest if lastest.id > id
   end
 
@@ -170,11 +164,93 @@ class Release < ApplicationRecord
     return if file.blank? || channel&.bundle_id.blank?
     return if channel.bundle_id_matched?(self.bundle_id)
 
-    message = "#{channel.app_name} 的 bundle id 或 packet name `#{self.bundle_id}` 无法和 `#{channel.bundle_id}` 匹配"
+    message = I18n.t('releases.messages.errors.bundle_id_not_matched', got: self.bundle_id,
+                                                                  expect: channel.bundle_id)
     errors.add(:file, message)
   end
 
+  def perform_teardown_job(user_id, when_to_run: :later)
+    case when_to_run
+    when :later
+      TeardownJob.perform_later(id, user_id)
+    when :now
+      TeardownJob.perform_now(id, user_id)
+    end
+  end
+
+  def platform
+    if ios?
+      'iOS'
+    elsif android?
+      'Android'
+    elsif harmonyos?
+      'HarmonyOS'
+    elsif mac?
+      'macOS'
+    elsif windows?
+      'Windows'
+    elsif linux?
+      'Linux'
+    else
+      'Unknown'
+    end
+  end
+
+  def ios?
+    platform_type.casecmp?('ios') || platform_type.casecmp?('iphone') ||
+    platform_type.casecmp?('ipad') || platform_type.casecmp?('universal') ||
+    platform_type.casecmp?('appletv')
+  end
+
+  def android?
+    platform_type.casecmp?('android') || platform_type.casecmp?('phone') ||
+    platform_type.casecmp?('tablet') || platform_type.casecmp?('watch') ||
+    platform_type.casecmp?('television') || platform_type.casecmp?('automotive')
+  end
+
+  def harmonyos?
+    platform_type.casecmp?('harmonyos') || platform_type.casecmp?('default')
+  end
+
+  def mac?
+    platform_type.casecmp?('macos')
+  end
+
+  def windows?
+    platform_type.casecmp?('windows')
+  end
+
+  def linux?
+    platform_type.casecmp?('linux') || platform_type.casecmp?('rpm') ||
+    platform_type.casecmp?('deb')
+  end
+
+  # @return [Boolean, nil] expired true or false in get expoired_at, nil is unknown.
+  def cert_expired?
+    return unless ios?
+    return unless expired_date = metadata&.mobileprovision&.fetch('expired_at', nil)
+
+    (Time.parse(expired_date) - Time.now) <= 0
+  end
+
+  def debug_file
+    debug_files = DebugFile.where(app: app, release_version: release_version, build_version: build_version)
+    return if debug_files.blank?
+
+    debug_files.select do |debug_file|
+      if ios?
+        debug_file.metadata.where("data->>'identifier' = ?", bundle_id).count > 0
+      elsif android?
+        debug_file.metadata.where(object: bundle_id).count > 0
+      end
+    end.first
+  end
+
   private
+
+  def platform_type
+    @platform_type ||= (device_type || Channel.device_types[channel.device_type])
+  end
 
   def auto_release_version
     latest_version = Release.where(channel: channel).limit(1).order(id: :desc).last
@@ -183,7 +259,8 @@ class Release < ApplicationRecord
 
   def convert_changelog
     if json_string?(changelog)
-      self.changelog = JSON.parse(changelog)
+      parsed = JSON.parse(changelog)
+      self.changelog = parsed.is_a?(Hash) ? [parsed] : parsed
     elsif changelog.blank?
       self.changelog = []
     elsif changelog.is_a?(String)
@@ -191,30 +268,60 @@ class Release < ApplicationRecord
       changelog.split("\n").each do |message|
         next if message.blank?
 
-        hash << { message: message }
+        message = message[1..-1].strip if message.start_with?('-')
+        hash << { 'message' => message }
       end
       self.changelog = hash
+    elsif changelog.is_a?(Array)
+      self.changelog = changelog
+    elsif changelog.is_a?(Hash)
+      self.changelog = [changelog]
     else
-      self.changelog ||= []
+      self.changelog = [{ 'message' => changelog.to_s }]
     end
   end
 
   def convert_custom_fields
     if json_string?(custom_fields)
-      self.custom_fields = JSON.parse(custom_fields)
+      parsed = JSON.parse(custom_fields)
+      self.custom_fields = parsed.is_a?(Hash) ? [parsed] : parsed
     elsif custom_fields.blank?
       self.custom_fields = []
+    elsif custom_fields.is_a?(Array)
+      self.custom_fields = custom_fields
+    elsif custom_fields.is_a?(Hash)
+      self.custom_fields = [custom_fields]
     else
-      self.custom_fields ||= []
+      self.custom_fields = []
     end
   end
 
   def detect_device
-    self.device ||= channel.device_type
+    self.device_type ||= Channel.device_types[channel.device_type]
+  end
+
+  def determine_file_exist
+    if self.file&.path.blank?
+      errors.add(:file, :invalid)
+    end
+  end
+
+  def determine_disk_space
+    upload_path = Sys::Filesystem.stat(Rails.root.join('public/uploads'))
+    disk_free_size = upload_path.bytes_free
+    file_size = self&.file&.size || 0
+
+    if disk_free_size <= file_size
+      disk_free_human = ActiveSupport::NumberHelper.number_to_human_size(disk_free_size)
+      file_size_human = ActiveSupport::NumberHelper.number_to_human_size(file_size)
+      errors.add(:file, :not_enough_space, disk_free: disk_free_human, file_size: file_size_human)
+    end
+  rescue
+    # do nothing
   end
 
   ORIGIN_PREFIX = 'origin/'
-  def trip_branch
+  def strip_branch
     return if branch.blank?
     return unless branch.start_with?(ORIGIN_PREFIX)
 
@@ -226,14 +333,38 @@ class Release < ApplicationRecord
   end
 
   def json_string?(value)
-    JSON.parse(value)
-    true
-  rescue
+    return false unless value.is_a?(String)
+
+    parsed = JSON.parse(value)
+    parsed.is_a?(Array) || parsed.is_a?(Hash)
+  rescue JSON::ParserError, TypeError
     false
   end
 
   def enabled_validate_bundle_id?
     bundle_id = channel.bundle_id
     !(bundle_id.blank? || bundle_id == '*')
+  end
+
+  def retained_build_job
+    RetainedBuildsJob.perform_later(channel)
+  end
+
+  def original_filename
+    file? ? file.identifier : default_filename
+  end
+  
+  def version_datetime_filename
+    [
+      channel.slug, release_version, build_version, created_at.strftime('%Y%m%d%H%M')
+    ].join('_') + file_extname
+  end
+
+  def default_filename
+    version_datetime_filename
+  end
+
+  def recently_release_app_id
+    app.id
   end
 end

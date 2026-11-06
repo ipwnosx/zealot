@@ -14,8 +14,6 @@ require 'action_mailer/railtie'
 # require 'action_text/engine'
 require 'action_view/railtie'
 require 'action_cable/engine'
-require 'sprockets/railtie'
-# require 'rails/test_unit/railtie'
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
@@ -23,18 +21,20 @@ Bundler.require(*Rails.groups)
 
 module Zealot
   class Application < Rails::Application
+    VERSION = '7.0.0'
+
     # Initialize configuration defaults for originally generated Rails version.
-    config.load_defaults 6.0
+    config.load_defaults 7.0
 
     # Set default timezone
-    config.time_zone = ENV['TIME_ZONE'] || 'Beijing'
+    config.time_zone = ENV['TIME_ZONE'] || 'Asia/Shanghai'
     config.active_record.default_timezone = :local
 
     # Set default locale
-    locale = ENV['LOCALE'] || 'zh-CN'
-    config.i18n.load_path += Dir[Rails.root.join('config', 'locales', '**', '*.{rb,yml}')]
-    config.i18n.default_locale = locale.to_sym
-    config.i18n.available_locales = [locale, :en]
+    locale = ENV['DEFAULT_LOCALE']&.to_sym
+    # config.i18n.load_path += Dir[Rails.root.join('config', 'locales', '**', '*.{rb,yml}')]
+    config.i18n.available_locales = %i[zh-CN en ja]
+    config.i18n.default_locale = config.i18n.available_locales.include?(locale) ? locale : :'zh-CN'
 
     # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
     # the I18n.default_locale when a translation cannot be found).
@@ -45,18 +45,15 @@ module Zealot
       from: ENV['ACTION_MAILER_DEFAULT_FROM'] || 'Zealot'
     }
 
-    # Set Redis as the back-end for the cache.
-    config.cache_store = :redis_cache_store, {
-      url: (ENV['REDIS_URL'] || 'redis://localhost:6379/0'),
-      namespace: ENV['REDIS_NAMESPACE'] || 'cache'
-    }
+    # Set the back-end for the cache.
+    config.cache_store = :solid_cache_store
 
-    # Set Sidekiq as the back-end for Active Job.
-    # Sidekiq not suggest to use perfix: https://github.com/mperham/sidekiq/issues/4034#issuecomment-442988685
-    config.active_job.queue_adapter = :sidekiq
+    # Set the back-end for Active Job.
+    config.active_job.queue_adapter = :good_job
 
     # Action Cable setting to de-couple it from the main Rails process.
     # config.action_cable.url = ENV['ACTION_CABLE_FRONTEND_URL'] || 'ws://localhost:28080'
+    config.action_cable.mount_path = '/cable'
 
     # Action Cable setting to allow connections from these domains.
     # if origins = ENV['ACTION_CABLE_ALLOWED_REQUEST_ORIGINS']
@@ -65,42 +62,14 @@ module Zealot
     #   config.action_cable.allowed_request_origins = origins
     # end
 
-    # Disable Asset Pipeline/Sprockets
-    # config.assets.enabled = false
-    # config.assets.compile = false
-
-    # Use a real queuing backend for Active Job (and separate queues per environment)
-    config.active_job.queue_adapter      = :sidekiq
-
-    # Settings in config/environments/* take precedence over those specified here.
-    # Application configuration can go into files in config/initializers
-    # -- all .rb files in that directory are automatically loaded after loading
-    # the framework and any gems in your application.
-    config.generators.javascripts = false
-    config.generators.stylesheets = false
+    # Auto load path
+    config.autoload_paths += Dir["#{config.root}/lib"]
+    config.eager_load_paths += Dir["#{config.root}/lib"]
 
     ################################################################
-
-    # Auto load path
-    config.autoload_paths += [
-      Rails.root.join('lib')
-    ]
-
-    # config.eager_load_paths += %W(
-    #   #{config.root}/lib
-    # )
-
-    # Don't generate system test files.
-    config.generators.system_tests = nil
-
-    # Disable yarn check(this must disable with docker)
-    # config.webpacker.check_yarn_integrity = false
-
-    # Manage exception page
-    # config.exceptions_app = self.routes
-  end
-
-  def self.config
-    @config ||= Rails.configuration.x
+    # Don't generate those files.
+    config.generators.javascripts = false
+    config.generators.stylesheets = false
+    config.generators.system_tests = false
   end
 end

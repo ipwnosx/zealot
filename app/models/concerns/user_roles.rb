@@ -3,20 +3,14 @@
 module UserRoles
   extend ActiveSupport::Concern
 
-  ROLE_NAMES = {
-    user: '用户',
-    developer: '开发者',
-    admin: '管理员'
-  }.freeze
-
   included do
     scope :admins, -> { where(role: :admin) }
     scope :developers, -> { where(role: :developer) }
-    scope :users, -> { where(role: :user) }
+    scope :members, -> { where(role: :member) }
   end
 
-  def manage?
-    admin? || developer?
+  def manage?(app: nil)
+    admin? || developer? || (app && app_roles?(app, :manage))
   end
 
   def grant_admin!
@@ -24,7 +18,7 @@ module UserRoles
   end
 
   def revoke_admin!
-    update!(role: :user)
+    update!(role: :member)
   end
 
   def grant_developer!
@@ -32,20 +26,27 @@ module UserRoles
   end
 
   def revoke_developer!
-    update!(role: :user)
+    update!(role: :member)
   end
 
   def roles?(value)
     roles.where(role: value.to_sym).exists?
   end
 
+  def app_roles?(app, value)
+    value = %w[admin developer] if value.to_sym == :manage
+    collaborators.where(app: app, role: value).exists?
+  end
+
   def role_name
-    if admin?
-      '管理员'
-    elsif developer?
-      '开发者'
-    else
-      '用户'
-    end
+    key = if admin?
+            :admin
+          elsif developer?
+            :developer
+          else
+            :member
+          end
+
+    Setting.builtin_roles[key]
   end
 end

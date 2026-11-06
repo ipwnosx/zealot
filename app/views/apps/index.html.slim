@@ -5,11 +5,16 @@
   = @title
 
 - content_for :section_rightpanel do
-  - if user_signed_in?
-    a.btn.btn-icon.bg-green href="#{new_app_path}"
-      i.far.fa-plus-square
-      | 新建应用
+  - if current_user&.manage? && @scope != 'archived'
+    = button_link_to t('apps.new.title'), new_app_path, 'plus-square', base_fa: 'fa-regular', \
+      class: 'd-btn d-btn-success', data: { turbo_frame: 'modal' }
 
-.row
-  == render 'list'
-  == render 'help'
+== render 'apps/toolbar'
+
+- if @apps.present?
+  ul#apps class="d-list mt-3"
+    - @apps.each do |app|
+      == render 'apps/app', app: app
+- else
+  div#apps class="mt-3"
+    == render 'apps/empty_apps'

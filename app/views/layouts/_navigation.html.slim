@@ -1,39 +1,45 @@
-// Navbar
-nav.main-header.navbar.navbar-expand.navbar-white.navbar-light
+div class="d-navbar border-base-300 border-b shadow-none transition-colors"
   - if user_signed_in_or_guest_mode?
-    ul.navbar-nav
-      li.nav-item
-        a.nav-link data-widget="pushmenu" href="#"
-          i.fas.fa-bars
-
-    // Right navbar links
-    ul.navbar-nav.ml-auto
-      - if user_signed_in?
-        li.nav-item.dropdown.user-menu
-          a.nav-link data-toggle="dropdown" href="#"
-            span.hidden-xs
-              = current_user.username
-          .dropdown-menu.dropdown-menu-lg.dropdown-menu-right
-            span.dropdown-item.dropdown-header = current_user.role_name
-            .dropdown-divider
-            = link_to '详情', edit_user_registration_path, class: 'dropdown-item'
-            .dropdown-divider
-            = link_to '登出', destroy_user_session_path, method: :delete, class: 'dropdown-item'
-      - else
-        li.nav-item
-          = link_to '登录', new_user_session_path, class: 'dropdown-item'
+    .d-navbar-start.ml-2.space-x-1.flex-grow.min-w-0
+      label.d-btn.d-btn-square.d-btn-ghost for="zealot-drawer" aria-label="open sidebar"
+        i.fa-solid.fa-bars.fa-lg
+      / .md:hidden
+      /   == render 'layouts/brand_logo', site_title: Setting.site_title
+      .flex-1.min-w-0
+        == render 'layouts/breadcrumbs', breadcrumbs: breadcrumbs
   - else
-    div.navbar-collapse.justify-content-md-center
-      h4
-        a href="#{ root_path }" style="color: black" = Setting.site_title
-
-// Main Sidebar Container
-- if user_signed_in_or_guest_mode?
-  aside.main-sidebar.sidebar-light-primary.elevation-2
-    // Brand Logo
-    a.brand-link href="#{ root_path }"
-      = image_tag asset_pack_path('media/images/touch-icon.png'), class: %w[brand-image]
-      span.brand-text.font-weight-light = Setting.site_title
-
-    // Sidebar
-    == render 'layouts/main_sidebar'
+    div class="d-navbar-start"
+    div class="d-navbar-center"
+      == render 'layouts/brand_logo', site_title: Setting.site_title
+  div class="d-navbar-end flex-1 md:flex-3 gap-1.5"
+    - unless devise_page?
+      - if user_signed_in?
+        = link_to modal_path('sponsor'), class: 'd-btn d-btn-soft d-btn-circle s-9', aria: { label: t('donate') }, data: { turbo_stream: true } do
+          i.fa-regular.fa-heart.text-red-500
+      - else
+        / Mobile: circle button
+        .md:hidden
+          = link_to modal_path('sponsor'), class: 'd-btn d-btn-soft d-btn-circle s-9', aria: { label: t('donate') }, data: { turbo_stream: true } do
+            i.fa-regular.fa-heart.text-red-500
+        / Desktop: default button with text
+        .hidden.md:block
+          = link_to modal_path('sponsor'), class: 'd-btn d-btn-soft', data: { turbo_stream: true } do
+            i.fa-regular.fa-heart.text-red-500
+            = t('donate')
+    - if user_signed_in?
+      div class="d-dropdown d-dropdown-end"
+        .d-avatar.d-avatar-placeholder.hover:cursor-pointer tabindex="0" role="button"
+          .bg-secondary.text-neutral-content.w-9.rounded-full.hover:bg-secondary/70
+            - initials = current_user.username.split.map { |name| name[0].upcase }.join[0,2]
+            span = initials
+        ul class="d-dropdown-content d-menu bg-base-200 rounded-box z-1 w-32 p-2 shadow-sm"
+          li = link_to t('user_profile'), edit_user_registration_path
+          li = button_to t('log_out'), destroy_user_session_path, method: :delete
+    - elsif !devise_page?
+      .md:hidden
+        = link_to new_user_session_path, class: 'd-btn d-btn-soft d-btn-circle' do
+          i.fa-solid.fa-user
+      .hidden.md:block
+        = link_to new_user_session_path, class: 'd-btn d-btn-soft' do
+          i.fa-solid.fa-user
+          = t('log_in')

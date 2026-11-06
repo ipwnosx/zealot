@@ -1,87 +1,144 @@
 # frozen_string_literal: true
 
 class ReleasesController < ApplicationController
-  before_action :authenticate_login!, except: %i[show auth]
+  include AppArchived
+
+  before_action :authenticate_login!, except: %i[index show auth]
   before_action :set_channel
   before_action :set_release, only: %i[show auth destroy]
   before_action :authenticate_app!, only: :show
 
   def index
-    return redirect_to root_path, notice: "应用不存在或已经被移除，页面跳转至首页" unless @channel
-    return redirect_to channel_path(@channel), notice: "应用版本不存在或已经被移除，页面跳转至应用渠道详情" if @channel.releases.empty?
-    redirect_to channel_release_path(@channel, @channel.releases.last), notice: "版本不存在或已经被移除，跳转至最新版本"
+    if @channel.releases.empty?
+      return redirect_to friendly_channel_overview_path(@channel),
+        notice: t('releases.messages.errors.not_found_release_and_redirect_to_channel')
+    end
+
+    @release = @channel.releases.last
+    authorize @release, :show?
+
+    @title = @release.app_name
+    render :show
   end
 
   def show
-    @title = @release.app_name
+    authorize @release
+
+    unless @release.custom_fields.is_a?(Array)
+      flash.now[:warn] = t('.custom_fields_invalid_json_format')
+    end
   end
 
   def new
-    @title = '上传应用'
+    raise_if_app_archived!(@channel.app)
+
+    @title = t('releases.new.title')
     @release = @channel.releases.new
     authorize @release
   end
 
   def create
-    @title = '上传应用'
+    raise_if_app_archived!(@channel.app)
+
+    if @channel.app.archived
+      message = t('releases.messages.errors.upload_to_archived_app', app: @channel.app.name)
+      redirect_to channel_path(@channel), alert: message
+      return
+    end
+
+    @title = t('releases.new.title')
     @release = @channel.releases.upload_file(release_params)
     authorize @release
 
-    return render :new unless @release.save
+    return render :new, status: :unprocessable_entity unless @release.save
 
-    # 触发异步任务
-    @release.channel.perform_web_hook('upload_events')
-    TeardownJob.perform_later(@release.id, current_user&.id)
+    # Trigger webhooks and teardown jobs
+    @release.channel.perform_web_hook('upload_events', current_user.id)
+    @release.perform_teardown_job(current_user.id)
 
-    redirect_to channel_release_url(@channel, @release), notice: '应用上传成功'
+    message = t('activerecord.success.create', key: "#{t('releases.title')}")
+    redirect_to channel_release_path(@channel, @release), notice: message
   end
 
   def destroy
+    authorize @release
+    raise_if_app_archived!(@channel.app)
+
     @release.destroy
-    redirect_to channel_versions_url(@channel), notice: '应用版本删除成功'
+
+    notice = t('activerecord.success.destroy', key: "#{t('releases.title')}")
+    redirect_to friendly_channel_releases_path(@channel), status: :see_other, notice: notice
   end
 
   def auth
-    if @channel.password == params[:password]
-      cookies[app_release_auth_key(@release)] = @channel.encode_password
-      redirect_to channel_release_path(@channel, @release)
-    else
-      flash[:danger] = '密码错误，请重新输入'
-      render :show
+    raise_if_app_archived!(@channel.app)
+
+    unless @release.password_match?(cookies, params[:password])
+      @error_message = t('releases.messages.errors.invalid_password')
+      return render :show, status: :unprocessable_entity
     end
+
+    back_url = params[:back_url].presence || friendly_channel_release_path(@channel, @release)
+    redirect_to back_url, status: :see_other
   end
 
   protected
 
   def authenticate_login!
-    authenticate_user! unless wechat? || Setting.guest_mode
+    authenticate_user! unless app_limited? || Setting.guest_mode
   end
 
   def authenticate_app!
-    return if wechat? || @channel.password.present? || user_signed_in? || Setting.guest_mode
+    return if app_limited? || @channel.password.present? || user_signed_in? || Setting.guest_mode
   end
 
-  def wechat?
-    request.user_agent.include? 'MicroMessenger'
+  def app_limited?
+    Setting.preset_install_limited
+      .find {|q| request.user_agent&.include?(q) }
+      .present?
   end
 
   def set_release
-    @release = Release.find params[:id]
+    @release = @channel.releases.find params[:id]
   end
 
   def set_channel
-    @channel = Channel.friendly.find params[:channel_id]
+    @channel = Channel.friendly.find params[:channel_id] || params[:channel]
   end
 
   def release_params
     params.require(:release).permit(
-      :file, :changelog, :release_type, :branch, :git_commit, :ci_url
+      :file, :changelog, :release_version, :build_version, :release_type, :branch, :git_commit, :ci_url
     )
   end
 
-  def render_not_found_entity_response(e)
-    @title = "#{@channel.app_name} 找不到 #{e.id} 版本"
-    @release_id = params[:id]
-    render :not_found, status: :not_found
+  def not_found(e)
+    @e = e
+    @title = t('releases.messages.errors.not_found')
+    @link_title = t('releases.messages.errors.redirect_to_app_list')
+    @link_href = apps_path
+
+    case e
+    when ActiveRecord::RecordNotFound
+      case e.model
+      when 'Channel'
+        @title = t('releases.messages.errors.not_found_app')
+        unless user_signed_in_or_guest_mode?
+          @link_title = @link_href = nil
+        end
+      when 'Release'
+        @title = t('releases.messages.errors.not_found_release')
+        if (current_user || Setting.guest_mode)
+          @link_title = t('releases.messages.errors.reidrect_channel_detal')
+          @link_href = friendly_channel_overview_path(@channel)
+        else
+          @link_title = t('releases.messages.errors.not_found_release_and_redirect_to_latest_release')
+          @link_href = friendly_channel_releases_path(@channel)
+        end
+
+      end
+    end
+
+    render 'releases/not_found', status: :not_found
   end
 end

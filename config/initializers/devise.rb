@@ -1,4 +1,88 @@
 # frozen_string_literal: true
+require_relative '../../lib/omni_auth/strategies/gitea'
+
+FEISHU_OMNIAUTH_SETUP = lambda do |env|
+  env['omniauth.strategy'].options[:client_id] = Setting.feishu[:app_id]
+  env['omniauth.strategy'].options[:client_secret] = Setting.feishu[:app_secret]
+end
+
+GITLAB_OMNIAUTH_SETUP = lambda do |env|
+  scope = Setting.gitlab[:scope]&.split(',').map(&:chomp).join(' ') || 'read_user'
+
+  env['omniauth.strategy'].options[:client_id] = Setting.gitlab[:app_id]
+  env['omniauth.strategy'].options[:client_secret] = Setting.gitlab[:secret]
+  env['omniauth.strategy'].options[:scope] = scope
+
+  if site = Setting.gitlab[:site].presence
+    env['omniauth.strategy'].options[:client_options] = {
+      site: site,
+      authorize_url: URI.join(site, '/oauth/authorize').to_s,
+      token_url: URI.join(site, '/oauth/token').to_s
+    }
+  end
+end
+
+GOOGLE_OMNIAUTH_SETUP = lambda do |env|
+  env['omniauth.strategy'].options[:client_id] = Setting.google_oauth[:client_id]
+  env['omniauth.strategy'].options[:client_secret] = Setting.google_oauth[:secret]
+end
+
+LDAP_OMNIAUTH_SETUP = lambda do |env|
+  env['omniauth.strategy'].options[:host] = Setting.ldap[:host]
+  env['omniauth.strategy'].options[:port] = Setting.ldap[:port].to_i
+  env['omniauth.strategy'].options[:encryption] = Setting.ldap[:encryption].to_sym
+  env['omniauth.strategy'].options[:bind_dn] = Setting.ldap[:bind_dn]
+  env['omniauth.strategy'].options[:password] = Setting.ldap[:password]
+  env['omniauth.strategy'].options[:base] = Setting.ldap[:base]
+  env['omniauth.strategy'].options[:uid] = Setting.ldap[:uid]
+end
+
+OIDC_OMNIAUTH_SETUP = lambda do |env|
+  issuer = URI.parse(Setting.oidc[:issuer_url])
+  scopes = Setting.oidc[:scope]&.split(',').map { |v| v.chomp.to_sym }
+  url_options = Setting.url_options
+  site_host = "#{url_options[:protocol]}#{url_options[:host]}"
+
+  env['omniauth.strategy'].options[:name] = Setting.oidc[:name]
+  env['omniauth.strategy'].options[:issuer] = Setting.oidc[:issuer_url]
+  env['omniauth.strategy'].options[:discovery] = Setting.oidc[:discovery]
+  env['omniauth.strategy'].options[:scope] = scopes
+  env['omniauth.strategy'].options[:response_type] = Setting.oidc[:response_type].to_sym
+  env['omniauth.strategy'].options[:uid_field] = Setting.oidc[:uid_field]
+  env['omniauth.strategy'].options[:client_options] = {
+    scheme: issuer.scheme,
+    port: issuer.port,
+    host: issuer.host,
+    identifier: Setting.oidc[:client_id],
+    secret: Setting.oidc[:client_secret],
+    authorization_endpoint: Setting.oidc[:auth_uri],
+    token_endpoint: Setting.oidc[:token_uri],
+    userinfo_endpoint: Setting.oidc[:userinfo_uri],
+    redirect_uri: "#{site_host}/users/auth/openid_connect/callback"
+  }
+end
+
+GITHUB_OMNIAUTH_SETUP = lambda do |env|
+  strategy = env['omniauth.strategy']
+  strategy.options[:client_id] = Setting.github[:app_id]
+  strategy.options[:client_secret] = Setting.github[:secret]
+  strategy.options[:scope] = Setting.github[:scope]
+  strategy.options[:required_org] = Setting.github[:required_org]
+end
+
+GITEA_OMNIAUTH_SETUP = lambda do |env|
+  strategy = env['omniauth.strategy']
+  strategy.options[:client_id] = Setting.gitea[:app_id]
+  strategy.options[:client_secret] = Setting.gitea[:secret]
+  strategy.options[:scope] = Setting.gitea[:scope]
+  if site = Setting.gitea[:site].presence
+    strategy.options[:client_options] = {
+      site: site,
+      authorize_url: URI.join(site, '/login/oauth/authorize').to_s,
+      token_url: URI.join(site, '/login/oauth/access_token').to_s
+    }
+  end
+end
 
 # Use this hook to configure devise mailer, warden hooks and so forth.
 # Many of these configuration options can be set straight in your model.
@@ -14,13 +98,42 @@ Devise.setup do |config|
   # Configure the e-mail address which will be shown in Devise::Mailer,
   # note that it will be overwritten if you use your own mailer class
   # with default "from" parameter.
-  # config.mailer_sender = 'no-reply@' + Zealot.config.url_options[:host]
-
-  # Configure the class responsible to send e-mails.
-  # config.mailer = 'Devise::Mailer'
+  # config.mailer_sender = -> {
+  #   Setting.mailer_default_from || 'no-reply@' + Setting.url_options[:host]
+  # }
 
   # Configure the parent class responsible to send e-mails.
-  # config.parent_mailer = 'ActionMailer::Base'
+  config.parent_mailer = 'ApplicationMailer'
+
+  # ==> Configuration for :magic_link_authenticatable
+
+  # Need to use a custom Devise mailer in order to send magic links.
+  # If you're already using a custom mailer just have it inherit from
+  # Devise::Passwordless::Mailer instead of Devise::Mailer
+  config.mailer = 'Devise::Passwordless::Mailer'
+
+  # Which algorithm to use for tokenizing magic links. See README for descriptions
+  config.passwordless_tokenizer = 'SignedGlobalIDTokenizer'
+
+  # Time period after a magic login link is sent out that it will be valid for.
+  Rails.configuration.to_prepare do
+    config.passwordless_login_within = -> {
+      expired = Setting.passwordless_login_enabled&.dig(:token_expiry_in_minutes).to_i
+      config.passwordless_login_within = expired.positive? ? expired.minutes : 15.minutes
+    }.call
+  end
+
+  # The secret key used to generate passwordless login tokens. The default value
+  # is nil, which means defer to Devise's `secret_key` config value. Changing this
+  # key will render invalid all existing passwordless login tokens. You can
+  # generate your own secret value with e.g. `rake secret`
+  # config.passwordless_secret_key = nil
+
+  # When using the :trackable module and MessageEncryptorTokenizer, set to true to
+  # consider magic link tokens generated before the user's current sign in time to
+  # be expired. In other words, each time you sign in, all existing magic links
+  # will be considered invalid.
+  # config.passwordless_expire_old_tokens_on_sign_in = false
 
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
@@ -99,7 +212,7 @@ Devise.setup do |config|
   # config.reload_routes = true
 
   # ==> Configuration for :database_authenticatable
-  # For bcrypt, this is the cost for hashing the password and defaults to 11. If
+  # For bcrypt, this is the cost for hashing the password and defaults to 12. If
   # using other algorithms, it sets how many times you want the password to be hashed.
   #
   # Limiting the stretches to just one in testing will increase the performance of
@@ -111,9 +224,6 @@ Devise.setup do |config|
 
   # Set up a pepper to generate the hashed password.
   # config.pepper = 'afb9f9d6fef3af737f6c1ffbf76a92ecea727a79ecd5976107a250420cb439965d89f5721c7052439308133c1b51aec9a61a9fc4f32b658432a1ab859969cd12'
-
-  # Send a notification email when the user's password is changed
-  config.send_password_change_notification = true
 
   # Send a notification email when the user's password is changed
   config.send_password_change_notification = true
@@ -138,7 +248,7 @@ Devise.setup do |config|
   # initial account confirmation) to be applied. Requires additional unconfirmed_email
   # db field (see migrations). Until confirmed, new email is stored in
   # unconfirmed_email column, and copied to email column on successful confirmation.
-  config.reconfirmable = true
+  config.reconfirmable = false
 
   # Defines which key will be used when confirming an account
   # config.confirmation_keys = [:email]
@@ -244,7 +354,7 @@ Devise.setup do |config|
   # should add them to the navigational formats lists.
   #
   # The "*/*" below is required to match Internet Explorer requests.
-  # config.navigational_formats = ['*/*', :html]
+  config.navigational_formats = ['*/*', :html, :turbo_stream]
 
   # The default HTTP method used to sign out a resource. Default is :delete.
   config.sign_out_via = :delete
@@ -268,46 +378,50 @@ Devise.setup do |config|
   # The router that invoked `devise_for`, in the example above, would be:
   # config.router_name = :my_engine
 
+  # ==> Hotwire/Turbo configuration
+  # When using Devise with Hotwire/Turbo, the http status for error responses
+  # and some redirects must match the following. The default in Devise for existing
+  # apps is `200 OK` and `302 Found respectively`, but new apps are generated with
+  # these new defaults that match Hotwire/Turbo behavior.
+  # Note: These might become the new default in future versions of Devise.
+  config.responder.error_status = :unprocessable_entity
+  config.responder.redirect_status = :see_other
+
   # ==> OmniAuth
   # Add a new OmniAuth provider. Check the wiki for more information on setting
   # up on your models and hooks.
-  # config.omniauth :github, 'APP_ID', 'APP_SECRET', scope: 'user,public_repo'
+  config.omniauth :feishu, setup: FEISHU_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::Feishu
+  config.omniauth :gitlab, setup: GITLAB_OMNIAUTH_SETUP
+  config.omniauth :google_oauth2, setup: GOOGLE_OMNIAUTH_SETUP
+  config.omniauth :ldap, setup: LDAP_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::LDAP
+  config.omniauth :openid_connect, setup: OIDC_OMNIAUTH_SETUP
+  config.omniauth :github, setup: GITHUB_OMNIAUTH_SETUP
+  config.omniauth :gitea, setup: GITEA_OMNIAUTH_SETUP
+end
 
-  # Google OAuth
-  if defined?(OmniAuth::Strategies::GoogleOauth2) &&
-     Rails.application.secrets[:google_oauth_enabled]
+module SafeStoreLocation
+  MAX_LOCATION_SIZE = ActionDispatch::Cookies::MAX_COOKIE_SIZE - 1024
 
-    google_client_id = Rails.application.secrets[:google_client_id]
-    google_secret = Rails.application.secrets[:google_secret]
+  # This overrides Devise's method for extracting the path from the URL. We
+  # want to ensure the path to be stored in the cookie is not too long in
+  # order to avoid ActionDispatch::Cookies::CookieOverflow exception. If the
+  # session cookie (containing all the session data) is over 4 KB in length,
+  # it would lead to an exception if the cookie store is being used. This is
+  # a hard constraint set by ActionDispatch because some browsers do not allow
+  # cookies over 4 KB.
+  #
+  # Original code in Devise: https://github.com/heartcombo/devise/blob/main/lib/devise/controllers/store_location.rb#L56
+  def extract_path_from_location(location)
+    path = super
+    return path unless Rails.application.config.session_store == ActionDispatch::Session::CookieStore
 
-    config.omniauth :google_oauth2,
-                    google_client_id,
-                    google_secret,
-                    skip_jwt: true,
-                    prompt: 'select_account',
-                    access_type: 'offline',
-                    scope: 'email,profile'
-  end
+    # Allow 3 KB size for the path because there can be also some other
+    # session variables out there.
+    return path if path.bytesize <= MAX_LOCATION_SIZE
 
-  # LDAP
-  if defined?(OmniAuth::Strategies::LDAP) &&
-     Rails.application.secrets[:ldap_enabled]
-
-    ldap_host = Rails.application.secrets[:ldap_host]
-    ldap_port = Rails.application.secrets[:ldap_port]
-    ldap_method = (Rails.application.secrets[:ldap_method] || 'plain').to_sym
-    ldap_base_dn = Rails.application.secrets[:ldap_base_dn]
-    ldap_password = Rails.application.secrets[:ldap_password]
-    ldap_base = Rails.application.secrets[:ldap_base]
-    ldap_uid = Rails.application.secrets[:ldap_uid]
-
-    config.omniauth :ldap, title: 'Zealot LDAP 认证登录',
-                           host: ldap_host,
-                           port: ldap_port,
-                           method: ldap_method,
-                           bind_dn: ldap_base_dn,
-                           password: ldap_password,
-                           base: ldap_base,
-                           uid: ldap_uid
+    # For too long paths, remove the URL parameters
+    path.split('?').first
   end
 end
+
+Devise::FailureApp.include SafeStoreLocation

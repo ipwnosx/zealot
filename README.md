@@ -1,55 +1,103 @@
-# Zealot
+<div align='center'>
+  <a href="https://www.producthunt.com/posts/zealot?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-zealot" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=322207&theme=light" style="width: 250px; height: 54px" width="250" height="54" /></a>
 
-[![GitHub release](https://img.shields.io/github/v/release/tryzealot/zealot?include_prereleases)](https://github.com/tryzealot/zealot/blob/develop/CHANGELOG.md)
-[![Docker Pulls](https://img.shields.io/docker/pulls/tryzealot/zealot.svg)](https://hub.docker.com/r/tryzealot/zealot/)
-[![Maintainability](https://codeclimate.com/github/tryzealot/zealot/badges/gpa.svg)](https://codeclimate.com/github/tryzealot/zealot)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/bcff7d9de5ba48528bc80aa01bd525c6)](https://www.codacy.com/manual/icyleaf/zealot)
-[![License](https://img.shields.io/github/license/tryzealot/zealot)](LICENSE)
+  <h1>Zealot</h1>
 
-开源自部署移动应用分发平台，提供 iOS、Android SDK、fastlane 等丰富组件库，打包分发流程、上传应用竟然如此简单、解决开发人员频繁打包的烦恼 🖖
+  <h4>
+    开源自部署持续集成一切跟应用有关事情，接入任意 CI 系统一切自动化处理，企业多年实战经验，独立部署提供企业打包分发流程、上传应用全套流程方案 En Taro Adun! 🖖
+    <br />
+    Continuous everything. Automate the lifecycle of your apps. Connect your CI to build in the cloud, test on thousands of real devices, distribute to beta testers and app stores. All in one place.
+  </h4>
 
-![Zealot Showcase](https://zealot.ews.im/_media/showcase.png)
+  <a href="https://github.com/tryzealot/zealot/blob/develop/CHANGELOG.md">
+    <img alt="changelog" src="https://img.shields.io/github/v/release/tryzealot/zealot?include_prereleases">
+  </a>
+  <a href="https://ghcr.io/tryzealot/zealot">
+    <img alt="docker image" src="https://img.shields.io/docker/pulls/tryzealot/zealot.svg">
+  </a>
+  <a href="https://t.me/+csa3Y2KOx44wMGRl">
+    <img alt="chat on telegram" src="https://img.shields.io/badge/chat-on%20telegram-important.svg">
+  </a>
+  <a title="Crowdin" target="_blank" href="https://crowdin.com/project/zealot"><img src="https://badges.crowdin.net/zealot/localized.svg"></a>
+  <a href="https://codeclimate.com/github/tryzealot/zealot/maintainability">
+    <img alt="codeclimate" src="https://api.codeclimate.com/v1/badges/f79b2fed0ce166b2ea2c/maintainability" />
+  </a>
+  <a href="https://www.codacy.com/gh/tryzealot/zealot/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=tryzealot/zealot&amp;utm_campaign=Badge_Grade">
+    <img alt="codacy" src="https://app.codacy.com/project/badge/Grade/5e5c7bbeb1214fa39b11a7414f0d7171"/>
+  </a>
+
+  <div>
+    <a href="https://zealot.ews.im/docs/self-hosted">Install</a> •
+    <a href="https://zealot.ews.im/docs/developer-guide/api">REST API</a> •
+    <a href="https://zealot.ews.im/docs/developer-guide">Developer guide</a> •
+    <a href="https://zealot.ews.im/docs/user-guide">User guide</a>
+  </div>
+
+  <div>
+    <a href="https://zealot.ews.im/zh-Hans/docs/self-hosted">自部署</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/developer-guide/api">API 接口</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/developer-guide">开发者资源</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/user-guide">用户使用手册</a>
+  </div>
+</div>
+
+![Zealot Showcase](https://github.com/tryzealot/docs/blob/main/static/img/showcase-light.png#gh-light-mode-only)
+![Zealot Showcase](https://github.com/tryzealot/docs/blob/main/static/img/showcase-dark.png#gh-dark-mode-only)
+
 ## 特性
 
-- [x] 支持 iOS 和 Android 应用的上传、在线安装和本地下载
-- [x] 支持应用创建各种类型（Debug、AdHoc、Enterprise、Release）和渠道（小米、华为、Oppp、Vivo、应用宝等）
-- [x] 支持 iOS dSYM 和 Android Progruard 文件的备份管理和解析
-- [x] 支持单次上传解析 iOS、Android 包甚至是 mobileprovision 文件的信息并存储编译分享他人
-- [x] 支持自定义网络钩子（WebHooks）发送给通知各种服务（钉钉、企业微信、Slack 等）
-- [x] 支持获取 iOS 设备 UDID 及显示该设备可以安装的应用
-- [x] 支持 OAuth 认证登录（目前以接入 Google，LDAP）
-- [x] 提供检查新版本和安装服务的 iOS 和 Android 组件
-- [x] 提供 fastlane 插件 [zealot](https://github.com/tryzealot/fastlane-plugin-zealot) 提供上传应用和调试文件服务、同步 iOS 设备 UDID 名单
-- [x] 可接入 Gitlab 服务直接挂钩源码管理
-- [ ] 可接入 Jenkins 服务实现远程构建
-- [x] 支持丰富的 REST APIs
-- [ ] 支持 GraphGL 接口（进行中）
+- 🌏 **多平台应用托管**: macOS、iOS、Android（apk/aab）、Windows、Linux 泛平台
+- 📱 **测试设备一网打进**: 自动同步 iOS 测试设备信息，允许一键注册新设备到苹果开发者
+- 🧑‍💻 **丰富开发者套件**: 提供 REST API、[iOS][zealot-ios-sdk]、[Android][android-android-sdk] SDK 以及 [fastlane][fastlane-plugin-zealot] 自动化构建插件
+- 💥 **剖析应用内部的秘密**: 解读 iOS、Android 应用或 iOS 描述文件的元信息
+- 🚨 **内置多种事件通知**: 数据可自定义 Income WebHook 到任意通知服务
+- 🗄 **多渠道分类管理**: 自由划分不同场景不同产品形态的应用渠道管理
+- 🎳 **多架构部署**: amd86/arm64 及各种部署方案应有尽有
+- 🔑 **第三方登录**: 飞书、Gitlab、Github、Google、LDAP 和 OIDC 一键授权
+- 🌑 **黑暗模式**: 黑夜白昼自由切换
 
 ## 在线演示
 
-- 演示地址：https://tryzealot.herokuapp.com/
-- 电子邮箱: `admin@zealot.com`
-- 登录密码：`ze@l0t`
+- 演示地址：https://tryzealot.ews.im
+- 中文账户: `cn_admin@zealot.com` / `ze@l0t`
+- English Account: `en_admin@zealot.com` / `ze@l0t`
 
-> **注意**: 数据每日都会重新初始化，不对用户上传的应用承担任何法律风险，后果自负！
+> **注意**: 演示服务中的数据每日都会重新初始化，不对用户上传的应用承担任何法律风险，后果自负！
 
-## 快速上手
+## 成为捐赠者
 
-```
-$ git clone https://github.com/tryzealot/zealot-docker.git
-$ cd zealot-docker
-$ ./deploy
-```
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://afdian.com/a/icyleaf">
+        <img src="https://afdian.com/static/img/icons/android-chrome-192x192.png" height="46" width="46" alt="爱发电" title="使用爱发电赞助" />
+      </a><br />
+      <sub>爱发电捐赠</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/sponsors/icyleaf">
+        <img src="https://camo.githubusercontent.com/369f5e3f574fd9693f5b1b6e193eb5211827ccacd0eec91ede06f7574e20f0c7/68747470733a2f2f6769746875622e6769746875626173736574732e636f6d2f696d616765732f6d6f64756c65732f736974652f73706f6e736f72732f6c6f676f2d6d6f6e612e737667" width="46" height="46" alt="Github Sponsor" title="Become a Github Sponsor" />
+      </a><br />
+      <sub>Become A Sponsor</sub>
+    </td>
+    <td align="center">
+      <a href="https://buymeacoffee.com/icyleaf">
+        <img src="https://studio.buymeacoffee.com/assets/img/bmc-meta-new/new/apple-icon-120x120.png" height="46" width="46" alt="Buy Me A Coffee" title="Buy Me A Coffee" />
+      </a><br />
+      <sub>Buy Me A Beer</sub>
+    </td>
+  </tr>
+</table>
 
-## 安装部署
+## 开发统计
 
-- [Docker](https://zealot.ews.im/#/deployment)
-- [源码](https://zealot.ews.im/#/development)
+![Alt](https://repobeats.axiom.co/api/embed/caba5e356c0e8258d395aaa9f70fec475a2eb643.svg "Repobeats analytics image")
 
-## 帮助和文档
+## 发布协议
 
-对 Zealot 感兴趣，看看文档了解下
+[MIT][mit-link]
 
-https://zealot.ews.im
-
-对 Zealot 有疑问或者建议，欢迎[提交问题](https://github.com/tryzealot/zealot/issues/new)，我会非常欢迎的。
+[zealot-ios-sdk]: https://github.com/tryzealot/zealot-ios
+[android-android-sdk]: https://github.com/tryzealot/zealot-android
+[fastlane-plugin-zealot]: https://github.com/tryzealot/fastlane-plugin-zealot
+[mit-link]: https://github.com/tryzealot/zealot/blob/develop/LICENSE

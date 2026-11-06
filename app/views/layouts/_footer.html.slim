@@ -1,9 +1,8 @@
-footer.main-footer
-  .float-right.d-none.d-sm-block
-    b Version
-    = " #{Setting.version}"
-  strong
-    | Copyright &copy; 2015-2019&nbsp
-    a href="https://github.com/tryzealot/zealot" Zealot
-    | .
-  |  All rights reserved.
+- unless devise_page?
+  footer class="flex justify-between bg-base-300 mt-3 gap-3 px-4 py-3"
+    div class="max-w-7xl space-x-1"
+      span = powered_by
+      - if Setting.show_footer_version
+        = zealot_version
+    div class="flex space-x-4"
+      = show_api

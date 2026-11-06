@@ -1,115 +1,143 @@
-FROM ruby:2.7-alpine as builder
+# Ruby version for both stages. Keep in sync with `.mise.toml` and the Gemfile's
+# `ruby '4.0.7'` directive. The image ships Bundler 4.0.20, which the lockfile's
+# BUNDLED WITH now pins, so no separate bundler install is needed.
+ARG RUBY_VERSION=4.0.7
+
+FROM ruby:${RUBY_VERSION}-alpine AS builder
 
 ARG BUILD_PACKAGES="build-base libxml2 libxslt git"
-ARG DEV_PACKAGES="libxml2-dev libxslt-dev yaml-dev imagemagick-dev postgresql-dev nodejs npm yarn"
+ARG DEV_PACKAGES="ruby-dev libffi-dev libxml2-dev libxslt-dev yaml-dev postgresql-dev nodejs npm pnpm zlib-dev imagemagick-dev libwebp-dev libpng-dev tiff-dev gcompat"
 ARG RUBY_PACKAGES="tzdata"
 
 ARG REPLACE_CHINA_MIRROR="true"
-ARG ORIGINAL_REPO_URL="http://dl-cdn.alpinelinux.org"
-ARG MIRROR_REPO_URL="https://mirrors.tuna.tsinghua.edu.cn"
-ARG RUBYGEMS_SOURCE="https://gems.ruby-china.com/"
-ARG NPM_REGISTRY="https://registry.npm.taobao.org"
-ARG RUBY_GEMS="bundler"
+ARG ORIGINAL_REPO_URL="dl-cdn.alpinelinux.org"
+ARG MIRROR_REPO_URL="mirrors.ustc.edu.cn"
+ARG RUBYGEMS_SOURCE="https://gems.ruby-china.com"
+ARG NPM_REGISTRY="https://registry.npmmirror.com"
 ARG APP_ROOT="/app"
 
 ENV BUNDLE_APP_CONFIG="$APP_ROOT/.bundle" \
-    RAILS_ENV="production"
+    RAILS_ENV="production" \
+    RUBY_YJIT_ENABLE="true"
 
 # System dependencies
 RUN set -ex && \
     if [[ "$REPLACE_CHINA_MIRROR" == "true" ]]; then \
-      REPLACE_STRING=$(echo $MIRROR_REPO_URL | sed 's/\//\\\//g') && \
-      SEARCH_STRING=$(echo $ORIGINAL_REPO_URL | sed 's/\//\\\//g') && \
-      sed -i "s/$SEARCH_STRING/$REPLACE_STRING/g" /etc/apk/repositories && \
+      sed -i "s/$ORIGINAL_REPO_URL/$MIRROR_REPO_URL/g" /etc/apk/repositories && \
       gem sources --add $RUBYGEMS_SOURCE --remove https://rubygems.org/ && \
       bundle config mirror.https://rubygems.org $RUBYGEMS_SOURCE; \
     fi && \
     apk --update --no-cache add $BUILD_PACKAGES $DEV_PACKAGES $RUBY_PACKAGES && \
     if [[ "$REPLACE_CHINA_MIRROR" == "true" ]]; then \
-      yarn config set registry $NPM_REGISTRY; \
-    fi && \
-    gem install $RUBY_GEMS
+      pnpm config set registry $NPM_REGISTRY; \
+    fi
 
 WORKDIR $APP_ROOT
 
 # Node dependencies
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Ruby dependencies
 COPY Gemfile Gemfile.lock ./
 RUN bundle config --global frozen 1 && \
     bundle config set deployment 'true' && \
     bundle config set without 'development test' && \
-    bundle install --path=vendor/bundle \
-      --jobs `expr $(cat /proc/cpuinfo | grep -c "cpu cores") - 1` --retry 3
+    bundle config set path 'vendor/bundle' && \
+    bundle lock --add-platform ruby && \
+    bundle install --jobs $(nproc) --retry 3
+
+# Platform assertion: no non-musl gem artifact may ship, enforced by the
+# script docker/platform_assertion.rb. It replaces force_ruby_platform, added
+# 2022-12 (commit 5b495933) because nokogiri shipped no precompiled musl gem
+# then. That flag disabled platform resolution instead of verifying its
+# result, so glibc artifacts could be installed unnoticed. Removal is safe
+# now: ffi 1.17.4, google-protobuf 4.33.0, nokogiri 1.19.4 and pg 1.7.0
+# publish musl-native platforms, now locked in Gemfile.lock. If this check
+# fails, fix the offending gem's resolution instead of restoring the flag.
+COPY docker/platform_assertion.rb /tmp/platform_assertion.rb
+RUN bundle exec ruby /tmp/platform_assertion.rb
 
 COPY . $APP_ROOT
-RUN SECRET_TOKEN=precompile_placeholder bin/rails assets:precompile && \
-    cp -r public/ new_public/
+RUN SECRET_KEY_BASE=precompile_placeholder bin/rails vite:build
 
-# Remove folders not needed in resulting image
+# Remove folders not needed in resulting image. The gem directory is resolved
+# from the interpreter instead of hard-coding the ABI path (ruby/3.4.0), so a
+# Ruby bump cannot silently skip this cleanup.
 RUN rm -rf docker node_modules tmp/cache spec .browserslistrc babel.config.js \
-    package.json postcss.config.js yarn.lock && \
-    cd /app/vendor/bundle/ruby/2.7.0 && \
+    package.json postcss.config.js pnpm-lock.yaml && \
+    cd "/app/vendor/bundle/ruby/$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" && \
       rm -rf cache/*.gem && \
       find gems/ -name "*.c" -delete && \
       find gems/ -name "*.o" -delete
 
 ##################################################################################
 
-FROM ruby:2.7-alpine
+ARG RUBY_VERSION
+
+FROM ruby:${RUBY_VERSION}-alpine
 
 ARG BUILD_DATE
 ARG VCS_REF
 ARG TAG
+ARG ZEALOT_VERSION
 
-ARG ZEALOT_VERSION="4.0.0"
 ARG REPLACE_CHINA_MIRROR="true"
-ARG ORIGINAL_REPO_URL="http://dl-cdn.alpinelinux.org"
-ARG MIRROR_REPO_URL="https://mirrors.tuna.tsinghua.edu.cn"
+ARG ORIGINAL_REPO_URL="dl-cdn.alpinelinux.org"
+ARG MIRROR_REPO_URL="mirrors.ustc.edu.cn"
 ARG RUBYGEMS_SOURCE="https://gems.ruby-china.com/"
-ARG PACKAGES="tzdata curl logrotate imagemagick imagemagick-dev postgresql-dev postgresql-client openssl openssl-dev"
-ARG RUBY_GEMS="bundler"
+ARG PACKAGES="tzdata curl logrotate postgresql-client postgresql-dev imagemagick imagemagick-dev libwebp-dev libpng-dev tiff-dev openssl openssl-dev caddy gcompat"
 ARG APP_ROOT=/app
-ARG S6_OVERLAY_VERSION="2.1.0.1"
-
-LABEL im.ews.zealot.build-date=$BUILD_DATE \
-      im.ews.zealot.vcs-ref=$VCS_REF \
-      im.ews.zealot.version="$ZEALOT_VERSION-$TAG" \
-      im.ews.zealot.name="Zealot" \
-      im.ews.zealot.description="Over The Air Server for deployment of Android and iOS apps" \
-      im.ews.zealot.url="https://zealot.ews.im/" \
-      im.ews.zealot.vcs-url="https://github.com/tryzealot/zealot" \
-      im.ews.zealot.maintaner="icyleaf <icyleaf.cn@gmail.com>"
+ARG S6_OVERLAY_VERSION="2.2.0.3"
+ARG TARGETARCH
 
 ENV TZ="Asia/Shanghai" \
     PS1="$(whoami)@$(hostname):$(pwd)$ " \
     DOCKER_TAG="$TAG" \
     BUNDLE_APP_CONFIG="$APP_ROOT/.bundle" \
     ZEALOT_VCS_REF="$VCS_REF" \
-    ZEALOT_VERSION="$ZEALOT_VERSION" \
-    RAILS_ENV="production"
+    ZEALOT_BUILD_DATE="$BUILD_DATE" \
+    RAILS_ENV="production" \
+    RUBY_YJIT_ENABLE="true"
 
 # System dependencies
 RUN set -ex && \
     if [[ "$REPLACE_CHINA_MIRROR" == "true" ]]; then \
-      REPLACE_STRING=$(echo $MIRROR_REPO_URL | sed 's/\//\\\//g') && \
-      SEARCH_STRING=$(echo $ORIGINAL_REPO_URL | sed 's/\//\\\//g') && \
-      sed -i "s/$SEARCH_STRING/$REPLACE_STRING/g" /etc/apk/repositories && \
+      sed -i "s/$ORIGINAL_REPO_URL/$MIRROR_REPO_URL/g" /etc/apk/repositories && \
       gem sources --add $RUBYGEMS_SOURCE --remove https://rubygems.org/; \
     fi && \
     apk --update --no-cache add $PACKAGES && \
-    curl -L -s https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-amd64.tar.gz | tar xvzf - -C / && \
-    gem install $RUBY_GEMS
+    echo "Setting variables for ${TARGETARCH}" && \
+    case "$TARGETARCH" in \
+    "amd64") \
+      S6_OVERLAY_ARCH="amd64" \
+    ;; \
+    "arm64") \
+      S6_OVERLAY_ARCH="aarch64" \
+    ;; \
+    *) \
+        echo "Doesn't support $TARGETARCH architecture" \
+        exit 1 \
+    ;; \
+    esac && \
+    curl -L -s https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_OVERLAY_ARCH}.tar.gz | tar xvzf - -C /
 
 WORKDIR $APP_ROOT
 
 COPY docker/rootfs /
 COPY --from=builder $APP_ROOT $APP_ROOT
 
+# Native-extension smoke: prove the delivered runtime stage's shared libraries
+# are complete. It must run here, not in the builder -- the two stages install
+# different system packages, and only this stage reflects the shipped image.
+# The requires and the pass line must stay in sync.
+COPY docker/native_extension_smoke.rb /tmp/native_extension_smoke.rb
+RUN bundle exec ruby /tmp/native_extension_smoke.rb && rm /tmp/native_extension_smoke.rb
+
 RUN ln -s /app/bin/rails /usr/local/bin/
 
-EXPOSE 3000
+EXPOSE 80
+
+# VOLUME [ "/app/public/uploads", "/app/public/backup" ]
 
 ENTRYPOINT ["/init"]

@@ -1,26 +1,14 @@
 ruby:
-  head_title, back_url = if params[:action] == 'new'
-    ['应用管理', apps_path]
-  else
-    ['返回应用', app_path(@app)]
-  end
+  schemes ||= 0
+  channels ||= 0
 
-.col-md-12
-  .card
-    .card-header
-      h3.card-title
-        = @title
-      .card-tools
-        a href="#{back_url}"
-          i.far.fa-list-alt
-          = " #{head_title}"
-    .card-body
-      = simple_form_for @app do |f|
-        = f.error_notification
+= simple_form_for app, data: { action: 'turbo:submit-end->modal#close' } do |f|
+  = f.error_notification
 
-        = f.input :name, required: true
-        - if params[:action] == 'new'
-          = f.simple_fields_for :schemes do |n|
-            = n.input :name, as: :check_boxes, collection: default_schemes, checked: default_schemes.last
-          = f.input :channel, collection: default_channels, label_method: :name, value_method: :value, selected: 0
-        = f.button :submit
+  = f.input :name, required: true
+  - if new_or_create_route?
+    = f.simple_fields_for :scheme_attributes do |n|
+      = n.input :name, as: :check_boxes, collection: preset_schemes, checked: schemes, required: false
+    = f.simple_fields_for :channel_attributes do |n|
+      = n.input :name, as: :check_boxes, collection: preset_channels, checked: channels, required: false
+  = f.button :submit

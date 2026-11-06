@@ -2,40 +2,70 @@ ruby:
   begin
     app_name = @metadata.name
   rescue Android::NotFoundError
-    app_name = '未知'
+    app_name = t('teardowns.show.unkonwn')
   end
+  
+  properties = [
+    {
+      key: t('teardowns.show.app_name'),
+      value: app_name
+    },
+    {
+      key: t('teardowns.show.version'),
+      value: "#{@metadata.release_version} (#{@metadata.build_version})"
+    },
+    {
+      key: t('teardowns.show.package_name'),
+      value: @metadata.packet_name
+    },
+    {
+      key: t('teardowns.show.native_codes'),
+      value: @metadata.native_codes.empty? ? '-' : @metadata.native_codes.join(', ')
+    },
+    {
+      key: t('teardowns.show.supported_device'),
+      value: "#{device_name(@metadata.device)} (Android)"
+    },
+    (@metadata.min_sdk_version.present? ? {
+      key: t('teardowns.show.android_min_sdk'),
+      value: android_version_info(@metadata.min_sdk_version)
+    } : nil),
+    (@metadata.target_sdk_version.present? ? {
+      key: t('teardowns.show.android_target_sdk'),
+      value: android_version_info(@metadata.target_sdk_version)
+    } : nil),
+    {
+      key: t('teardowns.show.file_size'),
+      value: number_to_human_size(@metadata.size)
+    },
+    {
+      key: t('teardowns.show.uploaded_date'),
+      value: l(@metadata.created_at, format: :nice)
+    },
+    {
+      key: t('teardowns.show.uploader'),
+      value: @metadata.user.username
+    }
+  ].compact
 
-.col-md-8
+.waterfall
   .card
     .card-header
-      h3.card-title 应用信息
-      .card-tools
-        button.btn.btn-tool data-card-widget="collapse"
-          i.fas.fa-minus
+      h3.card-title
+        i.fa-brands.fa-android.text-success.mr-1
+        = platform_name(@metadata.platform)
     .card-body
-      dl.system-info
-        dt 名称
-        dd
-          pre = app_name
-        dt 版本
-        dd
-          pre = "#{@metadata.release_version} (#{@metadata.build_version})"
-        dt 包名
-        dd
-          pre = @metadata.packet_name
-        dt 支持设备
-        dd
-          pre = @metadata.device
-        dt Android 最低版本 / 目标版本
-        dd
-          pre = "#{@metadata.min_sdk_version} / #{@metadata.target_sdk_version}"
-        dt 文件大小
-        dd
-          pre = number_to_human_size(@metadata.size)
+      - properties.each do |prop|
+        .property 
+          .property-key = prop[:key]
+          .property-value = prop[:value]
 
-  = render 'card', title: 'Activities', raw: @metadata.activities
-  = render 'card', title: 'Services', raw: @metadata.services
-
-.col-md-4
-  = render 'card', title: 'Features', raw: @metadata.features
-  = render 'card', title: 'Permissions', raw: @metadata.permissions
+  == render 'card', key: 'activities', raw: @metadata.activities
+  == render 'card', key: 'deep_links', raw: @metadata.deep_links
+  == render 'card', key: 'url_schemes', raw: @metadata.url_schemes
+  == render 'card', key: 'features', raw: @metadata.features
+  == render 'card', key: 'permissions', raw: @metadata.permissions
+  == render 'card', key: 'services', raw: @metadata.services
+  
+  - if @metadata.developer_certs.present?
+    == render 'signatures_part', signatures: @metadata.developer_certs

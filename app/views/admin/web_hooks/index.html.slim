@@ -1,38 +1,36 @@
 - content_for :title do
-  = @title
+  = t('.title')
 
 - content_for :section_title do
-  = @title
+  = t('.title')
 
-/ - content_for :section_rightpanel do
-/   a.btn.btn-icon.bg-green href="#{new_admin_web_hook_path}"
-/     i.far.fa-plus-square
-/     | 新建网络钩子
-
-.row
-  .col-md-12
-    .card
-      - if @web_hooks.size > 0
-        .card-body
-          table.table.p-0
-            thead
-              tr
-                th NO
-                th URL
-                th style="width: 240px" 应用渠道
-                th style="width: 70px" 操作
-            tbody
-              - @web_hooks.each_with_index do |web_hook, i|
-                tr
-                  td
-                    = i + 1
-                  td
-                    = link_to web_hook.url, admin_web_hook_path(web_hook)
-                  td
-                    = raw web_hook.channels.map {|c| c.app_name }.join("<br />")
-                  td
-                    = link_to '删除', admin_web_hook_path(web_hook), method: :delete, data: { confirm: '你确定？'}
-      - else
-        .card-body.p-0
-          .bg-warning.p-2.text-center
-            | 没有发现网络钩子
+- if @web_hooks.size > 0
+  .card
+    .card-header
+      h3.card-title
+        i.fa-solid.fa-bell
+        = t('.links', count: @web_hooks.size)
+    .card-body.p-0.overflow-x-auto
+      table.d-table
+        thead
+          tr
+            th = t('.url')
+            th.w-1/4 = t('.channels')
+            th.w-12.text-right
+        tbody
+          - @web_hooks.each_with_index do |web_hook, i|
+            tr
+              td.break-all
+                = link_to web_hook.url, edit_admin_web_hook_path(web_hook)
+              td.w-1/4
+                .d-badge.d-badge-info = web_hook.channels.size
+              td.text-right
+                = button_link_to '', admin_web_hook_path(web_hook), 'trash-alt', \
+                  class: 'd-btn d-btn-sm text-error d-tooltip', \
+                  data: { tip: t('modals.buttons.destroy'), turbo_method: :delete, turbo_confirm: t('modals.confirm.body') }
+- else
+  .card.card-outline.card-warning
+    .card-header.card-border
+      h3.card-title = t('.not_found')
+    .card-body 
+      p = t('.create_web_hook_from_channel_inside')

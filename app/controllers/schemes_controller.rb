@@ -1,89 +1,100 @@
 # frozen_string_literal: true
 
 class SchemesController < ApplicationController
-  before_action :authenticate_user!, except: :show
-  before_action :set_scheme, except: %i[create new]
+  include AppArchived
+  
+  before_action :authenticate_user! unless Setting.guest_mode
   before_action :set_app
+  before_action :set_scheme, except: %i[index create new]
+  before_action :process_scheme_params, only: %i[create]
+
+  def index
+    @title = t('schemes.title')
+    @schemes = @app.schemes.includes(:channels)
+    authorize @app, :index?
+  end
 
   def show
-    if (referer = request.referer) &&
-       (segment = Rails.application.routes.recognize_path(referer)) &&
-       segment[:controller] == 'channels' &&
-       segment[:action] == 'show'
-      previouse_channel = Channel.friendly.find(segment[:id])
-      @channel = @scheme.channels.find_by(device_type:  previouse_channel.device_type)
-    else
-      @channel = @scheme.latest_channel
-    end
-
-    redirect_to channel_path(@channel)
+    @title = t('schemes.title')
+    authorize @app, :show?
   end
 
   def new
-    @title = "新建#{@app.name}类型"
-    @scheme = Scheme.new
+    @page_title =t('.title.with_name', app: @app.name)
+    @title = t('.title.without_name')
+    @scheme = @app.schemes.build
     authorize @scheme
   end
 
   def create
-    channel = scheme_params.delete(:channel)
-    @scheme = Scheme.new(scheme_params)
+    channels = scheme_params.delete(:channel_attributes)[:name].reject(&:blank?)
+    @scheme = @app.schemes.new(scheme_params)
     authorize @scheme
 
-    @scheme.app = @app
-    return render :new unless @scheme.save
+    return render :new, status: :unprocessable_entity unless @scheme.save
 
-    create_channel_by(@scheme, channel)
-    redirect_to app_path(@app), notice: '类型已经创建成功！'
+    create_channels(channels)
+
+    flash.now[:notice] = t('activerecord.success.create', key: "#{@scheme.name} #{t('schemes.title')}")
+    respond_to do |format|
+      format.html { redirect_to app_path(@app) }
+      format.turbo_stream
+    end
   end
 
   def edit
-    @title = "编辑#{@app.name}类型"
-    raise ActionController::RoutingError, '这里没有你找的东西' unless @scheme
+    authorize @scheme
+    @page_title =t('.title.with_name', app: @app.name)
+    @title = t('.title.without_name')
   end
 
   def update
-    raise ActionController::RoutingError, '这里没有你找的东西' unless @scheme
-
+    authorize @scheme
     @scheme.update(scheme_params)
-    redirect_to app_path(@app)
+
+    flash.now[:notice] = t('activerecord.success.update', key: "#{@scheme.name} #{t('schemes.title')}")
+    respond_to do |format|
+      format.html { redirect_to app_path(@app) }
+      format.turbo_stream
+    end
   end
 
   def destroy
+    authorize @scheme
     @scheme.destroy
 
-    redirect_to app_path(@app)
+    flash.now[:notice] = t('activerecord.success.destroy', key: "#{@scheme.name} #{t('schemes.title')}")
+    respond_to do |format|
+      format.html { redirect_to app_path(@app) }
+      format.turbo_stream
+    end
   end
 
   protected
 
-  def create_channel_by(scheme, channel)
-    return unless channels = channel_value(channel)
+  def create_channels(channels)
+    return if channels.empty?
 
     channels.each do |channel_name|
-      scheme.channels.create name: channel_name, device_type: channel_name.downcase.to_sym
-    end
-  end
-
-  def channel_value(platform)
-    case platform
-    when 'ios' then ['iOS']
-    when 'android' then ['Android']
-    when 'both' then ['Android', 'iOS']
+      @scheme.channels.create name: channel_name, device_type: channel_name.downcase.to_sym
     end
   end
 
   def set_app
     @app = App.find(params[:app_id])
+    raise_if_app_archived!(@app) unless %w[index show].include?(action_name)
   end
 
   def set_scheme
-    @scheme = Scheme.find(params[:id])
-    authorize @scheme
+    @scheme = @app.schemes.find(params[:id])
   end
 
   def scheme_params
     @scheme_params ||= params.require(:scheme)
-                             .permit(:name, :channel)
+                             .permit(:name, :new_build_callout, :retained_builds, channel_attributes: { name: [] })
+  end
+
+  def process_scheme_params
+    @channels = scheme_params[:channel_attributes][:name].reject(&:empty?)
   end
 end

@@ -1,8 +1,11 @@
-.card.card-solid
+.card class="hidden md:block"
   .card-header
-    h3.card-title 渠道
-  .card-body.p-0
-    ul.nav.nav-pills.flex-column
-      - @channel.scheme.channels.each do |channel|
-        li.nav-item
-          = link_to display_app_device(channel), channel_path(channel), class: "nav-link #{params[:id] == channel.slug ? 'active' : ''}"
+    h3.card-title = t('channels.show.channel')
+  .card-body class="p-0"
+    ul class="d-list"
+      - scheme.channels.each do |channel|
+        ruby:
+          actived_class = (params[:id] || params[:channel]) == channel.slug ? 'bg-base-300' : ''
+        li class="d-list-row p-3 rounded-none #{actived_class}"
+          = link_to channel_platform(channel), friendly_channel_overview_path(channel), \
+            data: { turbo_frame: '_top' }

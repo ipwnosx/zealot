@@ -1,14 +1,48 @@
 - content_for :title do
-  = @title
+  = app_scoped_title(@app, @title)
 
 - content_for :section_title do
   = @title
 
 - content_for :section_rightpanel do
-  a.btn.btn-icon.bg-green href="#{new_teardown_path}"
-    i.far.fa-plus-square
-    | 开始解析
+  - if user_signed_in?
+    - if @app&.archived
+      small class="d-badge d-badge-sm d-badge-warning py-1"
+        = t('apps.show.archived')
+    - else
+      = button_link_to t('.create'), (@app ? new_app_teardown_path(@app) : new_teardown_path), 'plus-square', base_fa: 'fa-regular', \
+        class: 'd-btn d-btn-success'
 
-.row
-  == render 'list'
+ruby: 
+  manage_role = @metadata.any? { |md| current_user&.manage?(app: md.app) || current_user == md.user }
+
+.space-y-4
+  - if @metadata.present?
+    .card
+      .card-header
+        h3.card-title
+          i.fa-solid.fa-history
+          = t('.upload_history')
+      .card-body.p-0.gap-0
+        div class="hidden sm:grid sm:grid-cols-12 gap-2 py-2 px-3 text-xs font-semibold opacity-65 border-b border-base-300 sm:items-center sm:text-sm"
+          div class="col-span-12 sm:col-span-4" = t('.app_name')
+          div class="hidden sm:block sm:col-span-2" = t('.platform')
+          div class="hidden sm:block sm:col-span-2" = t('.uploader')
+          div class="hidden sm:block sm:col-span-3" = t('.uploaded_at')
+          - if user_signed_in? && manage_role
+            div class="hidden sm:flex sm:col-span-1 justify-end"
+        - @metadata.each do |md|
+          == render 'metadata', metadata: md, manage_role: manage_role
+
+      - if @metadata.total_pages > 1
+        .card-footer.flex.justify-end
+          = paginate @metadata
+  - else 
+    .card.card-outline.card-warning
+      .card-header.card-border
+        h3.card-title = t('.not_found.title')
+      .card-body 
+        p = t('.not_found.body_html')
+
+  == render 'help'
 

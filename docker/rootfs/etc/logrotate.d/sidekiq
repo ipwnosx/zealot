@@ -1,5 +1,0 @@
-/app/log/sidekiq.log {
-  missingok
-  notifempty
-  monthly
-}

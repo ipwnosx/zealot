@@ -1,23 +1,19 @@
 # frozen_string_literal: true
 
 Rails.configuration.to_prepare do
+  url_options = Setting.url_options
+  Rails.application.routes.default_url_options = url_options
+
+  # Configure ActionCable request protection
   Rails.application.configure do
-    https = Setting.site_https
-    host = Setting.site_domain
+    if ENV.fetch('ZEALOT_DISABLE_CABLE_REQUEST_PROTECTION') { 'false' } == 'true'
+      config.action_cable.disable_request_forgery_protection = true
+    else
+      config.action_mailer.default_url_options = url_options
 
-    url_options = {
-      host: host,
-      protocol: https ? 'https://' : 'http://',
-      trailing_slash: false
-    }
-
-    config.x.url_options  = url_options
-    config.x.use_https    = https
-    config.x.local_domain = host
-    config.x.host         = "#{url_options[:protocol]}#{url_options[:host]}"
-
-    config.action_mailer.default_url_options = url_options
+      config.action_cable.allowed_request_origins = [
+        /http(s)?:\/\/#{Setting.site_domain}/
+      ]
+    end
   end
-
-  Rails.application.routes.default_url_options = Zealot.config.url_options
 end

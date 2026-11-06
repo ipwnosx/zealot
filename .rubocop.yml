@@ -1,16 +1,19 @@
-require:
+plugins:
   - rubocop-rails
 
 AllCops:
-  TargetRubyVersion: 2.7
-  TargetRailsVersion: 6.1
+  TargetRubyVersion: 4.0
+  TargetRailsVersion: 8.0
   DisabledByDefault: true
+  SuggestExtensions: false
+  DisplayStyleGuide: true
   Exclude:
     - 'vendor/**/*'
     - 'node_modules/**/*'
     - 'tmp/**/*'
     - 'bin/**/*'
-    - "db/**/*"
+    - 'db/**/*'
+    - 'lib/omni_auth/**/*'
   CacheRootDirectory: tmp
 
 Style/FrozenStringLiteralComment:
@@ -19,44 +22,43 @@ Style/FrozenStringLiteralComment:
     - 'config.ru'
     - 'Gemfile'
     - 'Rakefile'
-    - 'Guardfile'
     - 'config/**/*'
-    - 'db/**/*'
-    - 'lib/tasks/**/*'
 
 # Some blocks are longer.
 Metrics/BlockLength:
-  ExcludedMethods:
+  Max: 250
+  AllowedMethods:
     - 'namespace'
     - 'create_table'
   Exclude:
     - 'config/**/*.rb'
     - 'spec/**/*.rb'
-    - 'lib/tasks/**/*'
-    - 'lib/backup/**/*'
 
 Layout/LineLength:
   Max: 120
   Exclude:
-    - 'Rakefile'
     - 'config/**/*.rb'
-    - 'lib/tasks/**/*'
-    - 'lib/backup/**/*'
+    - 'spec/**/*.rb'
+    - lib/zealot/backup/manager.rb
+    - app/services/create_sample_apps_service.rb
 
 Metrics/MethodLength:
   Max: 60
 
 Metrics/ClassLength:
-  Max: 150
+  Max: 250
+  Exclude:
+    - app/models/release.rb
 
 Metrics/ModuleLength:
-  Max: 150
+  Max: 180
 
 # Raise complexity metrics
 Metrics/AbcSize:
-  Max: 20
+  Max: 40
   Exclude:
     - 'lib/backup/**/*'
+    - app/models/apple_key.rb
 
 Style/Alias:
   EnforcedStyle: prefer_alias_method
@@ -89,8 +91,6 @@ Style/WordArray:
 
 Naming/AccessorMethodName:
   Enabled: true
-  Exclude:
-    - 'app/controllers/**/*'
 
 Style/RescueStandardError:
   Enabled: false
@@ -101,10 +101,10 @@ Lint/AssignmentInCondition:
 Style/TrailingCommaInHashLiteral:
   Enabled: false
 
-Naming/PredicateName:
+Naming/PredicatePrefix:
   Enabled: true
   Exclude:
-    - 'app/serializers/channel_serializer.rb'
+    - app/serializers/channel_serializer.rb
 
 Layout/HashAlignment:
   Enabled: false

@@ -1,0 +1,26 @@
+ruby:
+  events = [:upload_events, :download_events, :changelog_events]
+
+= turbo_frame_tag web_hook, class: 'flex flex-col gap-2 border-t border-base-300 py-2 px-3 text-sm first:border-0 sm:grid sm:grid-cols-12 sm:items-center' do
+  div class="col-span-12 sm:col-span-4 flex justify-between items-center sm:block"
+    .font-bold.break-all
+      = web_hook.url
+    - unless app.archived
+      .block.sm:hidden
+        == render 'apps/web_hooks/actions', app: app, web_hook: web_hook, events: events
+
+  div class="col-span-12 sm:col-span-3 flex flex-wrap gap-1"
+    - events.each do |event|
+      - if web_hook.send(event) == 1
+        span class="d-badge d-badge-sm d-badge-soft d-badge-secondary"
+          = t("simple_form.labels.web_hook.#{event}")
+
+  div class="col-span-12 sm:col-span-3 flex flex-wrap gap-1"
+    - web_hook.channels.each do |channel|
+      = link_to channel.channel_name, friendly_channel_overview_path(channel), \
+        class: 'd-badge d-badge-sm d-badge-soft d-badge-info', \
+        data: { turbo_frame: '_top' }
+
+  div class="hidden sm:flex sm:col-span-2 justify-end"
+    - unless app.archived
+      == render 'apps/web_hooks/actions', app: app, web_hook: web_hook, events: events

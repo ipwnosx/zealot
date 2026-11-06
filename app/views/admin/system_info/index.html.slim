@@ -1,70 +1,117 @@
 - content_for :title do
-  = @title
+  = t('.title')
 
 - content_for :section_title do
-  = @title
+  = t('.title')
 
-.row
-  .col-md-6
-    .card.system_info
+.grid.grid-cols-1.md:grid-cols-2.xl:grid-cols-3.2xl:grid-cols-4.gap-6
+  .card.system_info.mb-3
+    .card-header
+      h3.card-title = t('.server_info')
+    .card-body
+      .property
+        .property-key = t('.zealot_version')
+        .property-value.flex.justify-between[
+          data-controller="admin-new-release"
+          data-admin-new-release-version-value="#{Setting.version_info}"
+          data-admin-new-release-title-value="#{Rails.env.development? ? t('.dev_new_version') : t('.new_version')}"
+        ]
+          #current-version = Setting.version_info(suffix: true)
+          #new-version data-admin-new-release-target="newVersion"
+
+      - if @server[:zealot_vcs_ref]
+        .property
+          .property-key = t('.vcs_ref')
+          .property-value
+            = vcs_ref_link(@server[:zealot_vcs_ref])
+
+      - if @server[:build_date]
+        .property
+          .property-key = t('.build_date')
+          .property-value = @server[:build_date]
+      .property
+        .property-key = t('.os_info')
+        .property-value = @server[:os_info]
+      .property
+        .property-key = t('.postgres_version')
+        .property-value = @server[:pg_version]
+      .property
+        .property-key = t('.ruby_version')
+        .property-value = @server[:ruby_version]
+      .property
+        .property-key = t('.cpu_info')
+        .property-value
+          - if @server[:cpu]
+            = t('.cpu_core', count: @server[:cpu])
+          - else
+            = t('.fail_detect_cpu')
+      .property
+        .property-key = t('.memory_info')
+        .property-value.flex.flex-col
+          - if memory = @server[:memory]
+            = "#{number_to_human_size(memory[:used])} / #{number_to_human_size(memory[:total])}"
+            progress.d-progress class=progress_color(memory[:percent]) value=memory[:percent] max="100"
+          - else
+            = t('.fail_detect_memory')
+      .property
+        .property-key = t('.disk_info')
+        .property-value
+          - if diskspace = @server[:diskspace]
+            = "#{number_to_human_size(diskspace[:used])} / #{number_to_human_size(diskspace[:total])}"
+            progress.d-progress class=progress_color(diskspace[:percent]) value=diskspace[:percent] max="100"
+          - else
+            = t('.fail_detect_disk')
+      .property
+        .property-key = t('.lauched_time')
+        .property-value = "#{distance_of_time_in_words_to_now(@server[:booted_at])} (#{l(@server[:booted_at], format: :nice)})"
+
+  div
+    .card.card-outline.mb-3 class="#{@file_permissions[:health] ? 'card-success' : 'card-warning'}"
       .card-header
-        h3.card-title 服务器信息
-      .card-body
-        dl.system-info
-          dt Zealot 版本
-          dd
-            pre
-              - if @version[:update_available]
-                a.new-version.float-right href="#{@version[:release_link]}" target="_blank"
-                  i.fas.fa-rainbow
-                  | 发现新版本: #{@version[:latest_version]}
-              = @version[:current_version]
-          dt Ruby 版本
-          dd
-            pre = RUBY_DESCRIPTION
-          dt CPU
-          dd
-            pre
-              - if @cpus
-                = "#{@cpus.length} 核"
-              - else
-                | CPU 信息监测失败
-          dt 内存
-          dd
-            pre
-              - if @memory
-                = "#{number_to_human_size(@memory.active_bytes)} / #{number_to_human_size(@memory.total_bytes)}"
-              - else
-                | 内存信息监测失败
-          dt 运行时间
-          dd
-            pre
-              = distance_of_time_in_words_to_now(@booted_at)
-              |  (
-              = @booted_at
-              | )
-    .card
+        h3.card-title = t('.file_permissions')
+      .card-body.p-0.overflow-x-auto
+        table.d-table
+          - @file_permissions[:permissions].each do |permission|
+            tr
+              td.break-all = permission[:path]
+              td style="width: 20px"
+                - if permission[:health]
+                  i.fa-solid.fa-check.text-success
+                - else
+                  span.d-tooltip.d-tooltip-left data-tip=permission[:reason]
+                    i.fa-solid.fa-triangle-exclamation.text-warning
+      .card-footer
+        .opacity-65 = t('.messages.file_permissions_tip')
+
+    .card.card-outline class=(@disks.blank? && 'card-error')
       .card-header
-        h3.card-title 磁盘信息
-      .card-body
+        h3.card-title = t('.volume_mounted')
+      .card-body.py-1
         - unless @disks.blank?
-          dl.system-info
-            - @disks.each do |disk|
-              dt = disk[:mount_path]
-              dd
-                pre
-                  = "#{number_to_human_size(disk[:bytes_used])} / #{number_to_human_size(disk[:bytes_total])}"
+          - @disks.each do |disk|
+            .property
+              .property-key = disk[:mount_path]
+              .property-value
+                = "#{number_to_human_size(disk[:bytes_used])} / #{number_to_human_size(disk[:bytes_total])}"
+                progress.d-progress class=progress_color(disk[:percent]) value=disk[:percent] max="100"
         - else
-          | 硬盘信息无法获取
+          = t('.fail_detect_disk')
 
-  .col-md-6
-    .card
-      .card-header
-        h3.card-title 系统变量
-      .card-body
-        dl.system-info
-          - @env.each do |key, value|
-            dt = key
-            dd
-              pre
-                = value
+  .card
+    .card-header
+      h3.card-title = t('.system_environment')
+    .card-body
+      - @env.each do |key, value|
+        .property
+          .property-key = key
+          .property-value = secure_value(key, value)
+
+  .card
+    .card-header
+      h3.card-title = t('.ruby_gems')
+    .card-body.p-0.overflow-x-auto
+      table.d-table
+        - @gems.each do |name, version|
+          tr
+            td = name
+            td.break-all = version

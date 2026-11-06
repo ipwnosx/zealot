@@ -1,10 +1,26 @@
-= simple_form_for(@debug_file) do |f|
-  = f.error_notification
+ruby:
+  platform_locked = @debug_file.device_type.present?
+  ios = @debug_file.device_type.to_s.casecmp('ios').zero?
 
-  = f.input :app_id, collection: @apps, label_method: :name, selected: 0
-  = f.input :device_type, collection: DebugFile.device_types, label_method: :last, value_method: :first, selected: DebugFile.device_types.first
-  = f.input :release_version
-  = f.input :build_version
-  = f.input :file, required: true
-  = f.input :checksum, disabled: true, error: '文件不能重复上传'
-  = f.button :submit
+= simple_form_for([@app, @debug_file], html: { class: 'card'}) do |f|
+  .card-header
+    h3.card-title = @title
+  .card-body
+    = f.error_notification
+
+    / The platform comes from the card the upload was started from.
+    - if platform_locked
+      = f.hidden_field :device_type
+    - else
+      = f.input :device_type, collection: DebugFile.device_types, label_method: :last, value_method: :first, include_blank: false
+
+    / dSYM files carry their own version, iOS uploads never have to type it.
+    - unless ios
+      = f.input :release_version, hint: t('debug_files.form.release_version_hint')
+      = f.input :build_version, hint: t('debug_files.form.build_version_hint')
+
+    = f.input :file, required: true
+    - if @debug_file.errors[:checksum].present?
+      = f.input :checksum, disabled: true
+  .card-footer
+    = f.button :submit

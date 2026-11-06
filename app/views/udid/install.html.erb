@@ -5,7 +5,7 @@
         <key>PayloadContent</key>
         <dict>
             <key>URL</key>
-            <string><%= udid_retrieve_url %></string>
+            <string><%= retrieve_udid_index_url %></string>
             <key>DeviceAttributes</key>
             <array>
                 <string>UDID</string>
@@ -16,16 +16,13 @@
             </array>
         </dict>
         <key>PayloadOrganization</key>
-        <string>Zealot</string>
+        <string><%= t('udid.install.organization') %></string>
+        <key>PayloadDisplayName</key>
+        <string><%= t('udid.install.title') %></string>
+        <key>PayloadDescription</key>
+        <string><%= t('udid.install.description', name: Setting.site_title, url: root_url) %></string>
         <key>PayloadIdentifier</key>
         <string>im.ews.zealot.profile-service</string>
-        <key>PayloadDisplayName</key>
-        <string>获取设备UDID</string>
-        <key>PayloadDescription</key>
-        <string>本描述文件仅用来获取本机设备 UDID，获取信息后会自动删除掉本描述文件。
-
-本服务由 <%= root_url %> 提供。
-        </string>
         <key>PayloadType</key>
         <string>Profile Service</string>
         <key>PayloadVersion</key>

@@ -1,28 +1,20 @@
-- if @release.devices.present?
-  .devices
-    .card.collapsed-card
-      .card-header
-        h3.card-title
-          i.fas.fa-mobile-alt
-          = " #{@release.devices.count} 台测试设备 (UDID)"
-        .card-tools
-          button.btn.btn-tool data-toggle="dropdown"  title="显示设备名称需要使用 zealot_sync_device fastlane 插件"
-            i.fas.fa-info-circle
-          .dropdown-menu.dropdown-menu-right
-            small.dropdown-item
-              | 使用&nbsp
-              a href="http://zealot.ews.im/#/modules?id=zealot_sync_devices" target="_blank" zealot_sync_device
-              |  同步设备名称
-
-          button.btn.btn-tool data-card-widget="collapse"
-            i.fas.fa-plus
-      .card-body.p-0
-        table.table
-          - @release.devices.each do |device|
-            tr
-              td
-                span = device.udid
-                - if device.name.present?
-                  .float-right
-                    small.badge.badge-light
-                      = device.name
+- if devices.present?
+  .card
+    .card-header
+      h3.card-title
+        i.fa-solid.fa-mobile-alt
+        = t('releases.show.devices', count: devices.count)
+        .d-badge.d-badge-ghost = devices.count
+      .card-tools
+        = button_link_to '', t('releases.show.apple_team_link'), 'info-circle', target: '_blank', \
+          class: 'd-btn d-btn-sm d-btn-ghost d-tooltip d-tooltip-left', \
+          data: { tip: t('releases.show.sync_devices_feature') }
+    .card-body.p-0.overflow-x-auto
+      table.d-table
+        - devices.each do |device|
+          tr
+            td.flex.justify-between.items-center.gap-2
+              span.break-all = device.udid
+              - if device.name.present?
+                span.text-sm.opacity-65.shrink-0
+                  = device.name

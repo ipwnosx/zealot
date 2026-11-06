@@ -1,49 +1,38 @@
 ruby:
-  debug_files = app.debug_files.where(device_type: value).order(id: :desc)
+  version = debug_file_version(debug_file)
+  debug_file_path = app_debug_file_path(app, debug_file)
 
-.tab-pane id="tab-#{app.id}-#{value.downcase}" class="#{i == 0 ? 'active' : ''}"
-  - if debug_files.count > 0
-    table.table.table-hover
-      - debug_files.each do |debug_file|
-        tr
-          td
-            .debug-file-section id="debug-file-info-#{debug_file.id}" data-app-name="#{app.name}"
-              .debug-file-section-header
-                .debug-file-toggle data-id="#{debug_file.id}"
-                  h3.debug-file-section-title
-                    - unless debug_file.build_version.blank?
-                      span.debug-file-version
-                        = debug_file.release_version
-                    span.debug-file-device-type
-                      = device_name(debug_file.device_type)
-                  .debug-file-build-version
-                    - if debug_file.build_version.blank?
-                      | 后台任务正在解析中，请稍候刷新。
-                    - else
-                      | 构建版本：
-                      = debug_file.build_version
+li id=dom_id(debug_file) class="d-list-row flex items-center gap-4 hover:bg-base-200"
+  / Flex instead of the list row's grid: the grid sizes the text column to its
+  / content and leaves the rest of the row empty.
+  div class="min-w-0 flex-1"
+    div class="flex items-center gap-2"
+      span class="min-w-0 truncate text-base font-bold" title=version = version
+      - if debug_file.processing?
+        small class="d-badge d-badge-sm d-badge-warning flex-shrink-0" = t('debug_files.index.processing')
+      - elsif debug_file.parse_failed?
+        small class="d-badge d-badge-sm d-badge-error flex-shrink-0" = t('debug_files.index.parse_failed')
 
-                .debug-file-section-size
-                  - if debug_file.has_file?
-                    a.btn.btn-icon.btn-sm.btn-success.btn-flat href="#{debug_file.file_url}" target="_blank"
-                      i.fas.fa-download
-                      | 下载 (
-                      = number_to_human_size(debug_file.file.size)
-                      | )
-                  - else
-                    button.btn.btn-secondary.btn-icon.btn-sm.btn-flat.disabled
-                      i.fas.fa-ghost
-                      | 遗失文件无法下载
-                  - if user_signed_in?
-                    button.btn.btn-icon.btn-sm.btn-danger.btn-flat.destroy-debug-file data-id="#{debug_file.id}" data-url="#{debug_file_path(debug_file)}" data-toggle="modal"
-                      i.fas.fa-trash-alt
-                      | 删除
-                  .div.text-center
-                    small style="color: #999"
-                      | 上传于
-                      = time_ago_in_words(debug_file.created_at)
+    div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-base-content/60 sm:text-sm"
+      span class="whitespace-nowrap"
+        = t('debug_files.index.uploaded_at', time: time_ago_in_words(debug_file.created_at))
+      - if debug_file.filesize.present?
+        span class="text-base-content/30" = '·'
+        span class="whitespace-nowrap" = number_to_human_size(debug_file.filesize)
+      - if debug_file.parse_failed?
+        span class="text-base-content/30" = '·'
+        span class="min-w-0 truncate text-error" title=debug_file.parse_error = debug_file.parse_error
+      - elsif !debug_file.processing?
+        - if ios_debug_file?(debug_file)
+          span class="text-base-content/30" = '·'
+          span class="whitespace-nowrap" = t('debug_files.index.libraries_count', count: debug_file.libraries.count)
+        - elsif debug_file.proguard_files.present?
+          span class="text-base-content/30" = '·'
+          span class="whitespace-nowrap" = t('debug_files.index.files_count', count: debug_file.proguard_files.count)
 
-              == render 'metadata', debug_file: debug_file
-  - else
-    .alert
-      | 还没有上传任何调试文件，点击右上角上传一个吧。
+  div class="flex-shrink-0 text-base-content/40"
+    i.fa-solid.fa-chevron-right
+
+  / Stretched link: the entire row opens the file, not just the title.
+  = link_to debug_file_path, class: 'absolute inset-0 z-10 rounded-box focus-visible:ring-2 focus-visible:ring-primary' do
+    span.sr-only = version

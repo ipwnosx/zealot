@@ -1,11 +1,8 @@
 - content_for :title do
-  = @title
+  = t('.title')
 
 - content_for :section_title do
-  = @title
+  = t('.title')
 
-.row
-  .col-md-12
-    .card
-      .card-body.p-0
-        iframe src="#{admin_sidekiq_path}" style="border: 0" width="100%" height="970"
+.w-full class="h-[calc(100vh-10rem)]"
+  iframe.w-full.h-full src="#{admin_jobs_path(locale: @goodjob_locale)}"

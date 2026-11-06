@@ -1,23 +1,19 @@
-.card
-  .card-header
+.card.card-collapse.card-collapse-plus
+  input type="checkbox" checked="checked"
+  .card-header.card-collapse-toggle
     h3.card-title
-      i.fas.fa-info-circle
-      |  更新日志
+      i.fa-solid.fa-align-left
+      = t('releases.show.changelog')
     .card-tools
-      button.btn.btn-tool data-card-widget="collapse"
-        i.fas.fa-minus
-  .card-body.p-0
-    ul.products-list.product-list-in-card
-      - @release.changelog_list.each do |changelog|
-        li.item.pl-3.pr-3
-          .product-title
+  .card-body.p-0.gap-0
+    ul.d-list
+      - @release.array_changelog.each do |changelog|
+        li.d-list-row.flex.justify-between
+          = changelog_render changelog['message'], class: 'truncate'
+          .space-x-2
             - if date = changelog['date']
-              small.float-right
-                span.badge.badge-light data-toggle="tooltip" title="#{date}"
-                  = time_ago_in_words(date)
+              span.d-badge.d-tooltip data-tip="#{l(Time.parse(date), format: :nice)}"
+                = time_ago_in_words(date)
             - if changelog['author']
-              small.float-right.mr-1
-                span.badge.badge-info data-toggle="tooltip" title="#{changelog['email']}"
-                  = changelog['author']
-
-            = simple_format changelog['message'], class: 'mb-1'
+              span.d-badge.d-tooltip data-tip="#{changelog['email']}"
+                = changelog['author']

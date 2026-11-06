@@ -1,0 +1,21 @@
+- content_for :title do
+  = app_scoped_title(@app, @title)
+
+- content_for :section_title do
+  = @title
+
+- content_for :section_rightpanel do
+  - if @app.archived
+    small class="d-badge d-badge-sm d-badge-warning py-1"
+      = t('apps.show.archived')
+  - else
+    = button_link_to t('web_hooks.new.title'), new_app_web_hook_path(@app), 'plus-square', \
+      base_fa: 'fa-regular', \
+      class: 'd-btn d-btn-success', \
+      data: { turbo_frame: :modal }
+
+#web_hooks_container
+  - if @web_hooks.present?
+    == render 'table', web_hooks: @web_hooks, app: @app
+  - else
+    == render 'empty', app: @app

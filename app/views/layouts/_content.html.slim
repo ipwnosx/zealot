@@ -1,8 +1,5 @@
-== render 'layouts/content_header'
-
 // Main content
-section.content
-  - if user_signed_in?
-    == render 'layouts/messages'
-
-  == yield
+.app-container class="flex-1 px-4 py-2"
+  == render 'layouts/content_header'
+  .app-container-body
+    == yield
